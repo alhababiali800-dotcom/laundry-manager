@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+
+# Virtual Environment
+.venv/
+venv/
+
+# PyCharm
+.idea/
+
+# Visual Studio
+.vs/
+
+# Build
+build/
+dist/
+
+# Logs
+*.log
