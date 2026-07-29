@@ -1,6 +1,5 @@
 """
-Unified color palette — matches the login screen design.
-Use these constants in Python when inline styles are unavoidable.
+Unified color palette — dark mode
 """
 
 # Brand / navy
@@ -8,26 +7,26 @@ NAVY_DARK = "#0f2744"
 NAVY_MID = "#1e3a5f"
 NAVY_SLATE = "#0f172a"
 
-# Primary action (buttons, focus, active nav)
-PRIMARY = "#2563eb"
-PRIMARY_HOVER = "#1d4ed8"
-PRIMARY_PRESSED = "#1e40af"
+# Primary action (buttons, focus, active nav) — brightened for dark bg contrast
+PRIMARY = "#3b82f6"
+PRIMARY_HOVER = "#60a5fa"
+PRIMARY_PRESSED = "#2563eb"
 
-# Surfaces
-BG_APP = "#f1f5f9"
-BG_CARD = "#ffffff"
-BG_SUBTLE = "#f8fafc"
+# Surfaces (dark)
+BG_APP = "#0b1220"
+BG_CARD = "#151f30"
+BG_SUBTLE = "#111a2b"
 
 # Borders
-BORDER = "#e2e8f0"
-BORDER_INPUT = "#cbd5e1"
+BORDER = "#2a374d"
+BORDER_INPUT = "#3d4d68"
 
-# Text
-TEXT_PRIMARY = "#0f172a"
-TEXT_BODY = "#1e293b"
-TEXT_LABEL = "#334155"
-TEXT_MUTED = "#64748b"
-TEXT_PLACEHOLDER = "#94a3b8"
+# Text (light on dark)
+TEXT_PRIMARY = "#f8fafc"
+TEXT_BODY = "#e2e8f0"
+TEXT_LABEL = "#cbd5e1"
+TEXT_MUTED = "#94a3b8"
+TEXT_PLACEHOLDER = "#64748b"
 TEXT_ON_DARK = "#f8fafc"
 TEXT_ON_DARK_MUTED = "#cbd5e1"
 
@@ -37,10 +36,10 @@ SIDEBAR_GRADIENT = (
 )
 
 # Semantic
-SUCCESS = "#16a34a"
-WARNING = "#d97706"
-DANGER = "#dc2626"
-INFO_BG = "#dbeafe"
+SUCCESS = "#22c55e"
+WARNING = "#f59e0b"
+DANGER = "#ef4444"
+INFO_BG = "#1e3a5f"
 
 # Radius
 RADIUS_SM = "8px"

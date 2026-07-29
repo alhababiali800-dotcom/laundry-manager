@@ -7,7 +7,7 @@ from utils.theme import (
     SUCCESS, WARNING, DANGER, INFO_BG,
 )
 
-APP_STYLE = """
+APP_STYLE = f"""
 * {{
     font-family: 'Segoe UI', 'Tahoma', 'Arial', sans-serif;
     font-size: 13px;
@@ -561,7 +561,7 @@ QMessageBox QPushButton:hover {{ background: {PRIMARY_HOVER}; }}
 """
 
 
-LOGIN_STYLE = """
+LOGIN_STYLE = f"""
     QWidget#login_root {{
         background: {BG_APP};
         font-family: 'Segoe UI', Arial, sans-serif;

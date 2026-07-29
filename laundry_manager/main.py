@@ -14,7 +14,9 @@ from PyQt6.QtWidgets import QApplication, QMessageBox
 from database.schema import initialize_database
 from utils.i18n import init_language
 from views.login_window import LoginWindow
+from PyQt6.QtGui import QPalette, QColor
 from views.main_window import MainWindow
+
 
 # Global references - prevents garbage collection
 _login_win = None
@@ -77,6 +79,7 @@ def setup_crash_logger():
 def main():
     os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")          # ← السطر الجديد
     app.setApplicationName("International Laundries")
 
     log_file = setup_crash_logger()

@@ -8,7 +8,7 @@ from PyQt6.QtGui import QColor
 from models.all_models import OrderModel, CustomerModel, ActivityModel
 from datetime import datetime
 from utils.i18n import tr, format_date, status_label
-from utils.theme import PRIMARY, BORDER, BG_CARD, TEXT_PRIMARY, TEXT_LABEL, TEXT_MUTED
+from utils.theme import PRIMARY, BORDER, BORDER_INPUT, BG_APP, BG_CARD, TEXT_PRIMARY, TEXT_LABEL, TEXT_MUTED
 from views.base_view import table_item, muted_label, page_heading, field_label, make_btn
 from views.widgets.lang_toggle import LanguageToggle
 
@@ -63,14 +63,14 @@ class DashboardView(QWidget):
         self.lbl_qa = page_heading(tr("quick_actions"))
         self.lbl_qa.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {TEXT_PRIMARY};")
         qa_col.addWidget(self.lbl_qa)
-        
+
         qa_grid = QGridLayout()
         qa_grid.setSpacing(10)
         quick_actions = [
-            ("qa_new_order", "#dbeafe", PRIMARY, "📦", "orders"),
-            ("qa_add_customer", "#dcfce7", "#16a34a", "👤", "customers"),
-            ("qa_new_contract", "#f3e8ff", "#7c3aed", "📋", "contracts"),
-            ("qa_view_invoices", "#fef9c3", "#ca8a04", "🧾", "invoices"),
+            ("qa_new_order", "#1e3a5f", "#93c5fd", "📦", "orders"),
+            ("qa_add_customer", "#14532d", "#86efac", "👤", "customers"),
+            ("qa_new_contract", "#3b0764", "#d8b4fe", "📋", "contracts"),
+            ("qa_view_invoices", "#713f12", "#fde047", "🧾", "invoices"),
         ]
         for i, (key, bg, fg, icon, page) in enumerate(quick_actions):
             btn = QPushButton()
@@ -95,20 +95,37 @@ class DashboardView(QWidget):
         self.lbl_qc = page_heading(tr("new_customer"))
         self.lbl_qc.setStyleSheet(f"font-size: 15px; font-weight: bold; color: {TEXT_PRIMARY};")
         qcl.addWidget(self.lbl_qc)
-        
+
         form = QFormLayout()
         form.setSpacing(8)
         self.qc_name = QLineEdit(); self.qc_name.setPlaceholderText(tr("name"))
         self.qc_phone = QLineEdit(); self.qc_phone.setPlaceholderText(tr("phone"))
+
+        line_edit_style = f"""
+            QLineEdit {{
+                background: {BG_APP};
+                color: {TEXT_PRIMARY};
+                border: 1px solid {BORDER_INPUT};
+                border-radius: 8px;
+                padding: 8px 10px;
+                font-size: 13px;
+            }}
+            QLineEdit:focus {{
+                border: 1px solid {PRIMARY};
+            }}
+        """
+        self.qc_name.setStyleSheet(line_edit_style)
+        self.qc_phone.setStyleSheet(line_edit_style)
+
         form.addRow(field_label(tr("name")), self.qc_name)
         form.addRow(field_label(tr("phone")), self.qc_phone)
         qcl.addLayout(form)
-        
+
         self.btn_qc_save = make_btn(tr("save"), "btn_primary")
         self.btn_qc_save.clicked.connect(self._quick_customer_save)
         qcl.addWidget(self.btn_qc_save)
         middle_row.addWidget(qc_card, 1)
-        
+
         layout.addLayout(middle_row)
 
         self.lbl_recent = page_heading(tr("recent_orders"))
@@ -191,13 +208,13 @@ class DashboardView(QWidget):
                 "qa_new_contract": "📋", "qa_view_invoices": "🧾",
             }
             self._style_qa_btn(btn, bg, fg, icons.get(key, ""), tr(key))
-        
+
         from utils.i18n import get_lang
         if get_lang() == 'ar':
             self.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
         else:
             self.setLayoutDirection(Qt.LayoutDirection.LeftToRight)
-            
+
         self.refresh()
 
     def refresh(self):
@@ -212,10 +229,10 @@ class DashboardView(QWidget):
 
         statuses = OrderModel.count_by_status()
         cards = [
-            ("📦", str(OrderModel.count_today()), tr("stat_today_orders"), tr("stat_today_sub"), PRIMARY, "#eff6ff"),
-            ("⏳", str(statuses.get("processing", 0)), tr("stat_in_progress"), tr("stat_in_progress_sub"), "#f59e0b", "#fffbeb"),
-            ("✅", str(statuses.get("ready", 0)), tr("stat_ready"), tr("stat_ready_sub"), "#22c55e", "#f0fdf4"),
-            ("💰", f"RM {OrderModel.revenue_month():.0f}", tr("stat_revenue"), tr("stat_revenue_sub"), "#1e3a5f", "#f1f5f9"),
+            ("📦", str(OrderModel.count_today()), tr("stat_today_orders"), tr("stat_today_sub"), PRIMARY, "#16233a"),
+            ("⏳", str(statuses.get("processing", 0)), tr("stat_in_progress"), tr("stat_in_progress_sub"), "#f59e0b", "#2a2312"),
+            ("✅", str(statuses.get("ready", 0)), tr("stat_ready"), tr("stat_ready_sub"), "#22c55e", "#122a1a"),
+            ("💰", f"RM {OrderModel.revenue_month():.0f}", tr("stat_revenue"), tr("stat_revenue_sub"), "#93c5fd", "#151f30"),
         ]
         for i, (icon, val, title, sub, accent, bg) in enumerate(cards):
             card = QFrame()
@@ -228,7 +245,7 @@ class DashboardView(QWidget):
             icon_lbl = QLabel(icon)
             icon_lbl.setFixedSize(48, 48)
             icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            icon_lbl.setStyleSheet(f"background: {accent}; color: white; font-size: 22px; border-radius: 12px;")
+            icon_lbl.setStyleSheet(f"background: {accent}; color: {BG_APP}; font-size: 22px; border-radius: 12px;")
             cl.addWidget(icon_lbl)
 
             text_col = QVBoxLayout()
@@ -249,8 +266,8 @@ class DashboardView(QWidget):
 
     def _load_recent(self):
         STATUS_BG = {
-            "received": "#dbeafe", "processing": "#fef9c3",
-            "ready": "#dcfce7", "delivered": "#f1f5f9", "cancelled": "#fee2e2",
+            "received": "#1e3a5f", "processing": "#713f12",
+            "ready": "#14532d", "delivered": "#1f2937", "cancelled": "#7f1d1d",
         }
         orders = OrderModel.get_all()[:8]
         self.tbl.setRowCount(len(orders))
@@ -260,7 +277,7 @@ class DashboardView(QWidget):
             self.tbl.setItem(r, 1, table_item(name))
             status = o.get("status", "")
             st_item = table_item(status_label(status), align_center=True)
-            st_item.setBackground(QColor(STATUS_BG.get(status, "#f1f5f9")))
+            st_item.setBackground(QColor(STATUS_BG.get(status, "#1f2937")))
             self.tbl.setItem(r, 2, st_item)
             self.tbl.setItem(r, 3, table_item(f"RM {o.get('total_amount', 0):.2f}"))
             self.tbl.setItem(r, 4, table_item(str(o.get("created_at", ""))[:10]))
