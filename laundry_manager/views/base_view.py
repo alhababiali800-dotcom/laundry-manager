@@ -10,13 +10,13 @@ from utils.theme import TEXT_PRIMARY, TEXT_BODY, PRIMARY, BORDER, BG_SUBTLE
 
 
 STATUS_BG = {
-    'received': '#dbeafe', 'processing': '#fef9c3',
-    'ready': '#dcfce7', 'delivered': BG_SUBTLE,
-    'cancelled': '#fee2e2', 'active': '#dcfce7',
-    'expired': '#fee2e2', 'paid': '#dcfce7',
-    'partial': '#fef9c3', 'unpaid': '#fee2e2',
-    'pending': '#fef9c3', 'admin': '#dbeafe',
-    'manager': '#fef9c3', 'staff': BG_SUBTLE,
+    'received': '#1e3a5f', 'processing': '#713f12',
+    'ready': '#14532d', 'delivered': '#1f2937',
+    'cancelled': '#7f1d1d', 'active': '#14532d',
+    'expired': '#7f1d1d', 'paid': '#14532d',
+    'partial': '#713f12', 'unpaid': '#7f1d1d',
+    'pending': '#713f12', 'admin': '#1e3a5f',
+    'manager': '#713f12', 'staff': '#1f2937',
 }
 
 

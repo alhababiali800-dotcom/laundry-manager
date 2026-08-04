@@ -14,7 +14,10 @@ from views.base_view import (
     DataTable, SearchBar, make_btn, colored_item, table_item,
     page_title, muted_label, dialog_title, h_separator, field_label, value_label, status_chip,
 )
-from utils.theme import TEXT_PRIMARY, PRIMARY, BORDER, BG_CARD
+from utils.theme import (
+    TEXT_PRIMARY, TEXT_BODY, TEXT_LABEL, PRIMARY, PRIMARY_HOVER, PRIMARY_PRESSED,
+    BORDER, BORDER_INPUT, BG_APP, BG_CARD, BG_SUBTLE, DANGER,
+)
 from utils.i18n import tr
 
 
@@ -36,7 +39,7 @@ class ProductCard(QFrame):
             }}
             QFrame#product_card:hover {{
                 border: 2px solid {PRIMARY};
-                background: #eff6ff;
+                background: {BG_SUBTLE};
             }}
         """)
         self._build()
@@ -97,7 +100,7 @@ class NewOrderDialog(QDialog):
 
         # ── LEFT: catalog ─────────────────────────────────────
         left = QWidget()
-        left.setStyleSheet("background:#ffffff;")
+        left.setStyleSheet(f"background:{BG_CARD};")
         lv = QVBoxLayout(left)
         lv.setContentsMargins(16, 16, 16, 16)
         lv.setSpacing(10)
@@ -123,35 +126,35 @@ class NewOrderDialog(QDialog):
         right = QFrame()
         right.setObjectName("orderSummaryPanel")
         right.setAutoFillBackground(True)   # <-- critical for background colour
-        right.setStyleSheet("""
-            QFrame#orderSummaryPanel {
-                background: #f4f7fb;
-                border-left: 1.5px solid #d1dae6;
-            }
-            QFrame#orderSummaryPanel QLabel {
-                color: #0a0f1e;
+        right.setStyleSheet(f"""
+            QFrame#orderSummaryPanel {{
+                background: {BG_APP};
+                border-left: 1.5px solid {BORDER};
+            }}
+            QFrame#orderSummaryPanel QLabel {{
+                color: {TEXT_PRIMARY};
                 background: transparent;
-            }
+            }}
             QFrame#orderSummaryPanel QComboBox,
             QFrame#orderSummaryPanel QDateTimeEdit,
-            QFrame#orderSummaryPanel QDoubleSpinBox {
-                background: #ffffff;
-                color: #0a0f1e;
-                border: 1.5px solid #b0bfcf;
+            QFrame#orderSummaryPanel QDoubleSpinBox {{
+                background: {BG_CARD};
+                color: {TEXT_PRIMARY};
+                border: 1.5px solid {BORDER_INPUT};
                 border-radius: 8px;
                 padding: 6px 10px;
                 min-height: 32px;
-            }
+            }}
             QFrame#orderSummaryPanel QComboBox:focus,
             QFrame#orderSummaryPanel QDateTimeEdit:focus,
-            QFrame#orderSummaryPanel QDoubleSpinBox:focus {
-                border-color: #2563eb;
-            }
-            QFrame#orderSummaryPanel QComboBox QAbstractItemView {
-                background: #ffffff;
-                color: #0a0f1e;
-                selection-background-color: #dbeafe;
-            }
+            QFrame#orderSummaryPanel QDoubleSpinBox:focus {{
+                border-color: {PRIMARY};
+            }}
+            QFrame#orderSummaryPanel QComboBox QAbstractItemView {{
+                background: {BG_CARD};
+                color: {TEXT_PRIMARY};
+                selection-background-color: #1e3a5f;
+            }}
         """)
         right.setMinimumWidth(340)
         right.setMaximumWidth(430)
@@ -178,18 +181,18 @@ class NewOrderDialog(QDialog):
         # ── Title
         title_lbl = QLabel(tr("order_details"))
         title_lbl.setStyleSheet(
-            "font-size:16px; font-weight:bold; color:#0a0f1e;")
+            f"font-size:16px; font-weight:bold; color:{TEXT_PRIMARY};")
         rv.addWidget(title_lbl)
 
         sep0 = QFrame()
         sep0.setFrameShape(QFrame.Shape.HLine)
-        sep0.setStyleSheet("background:#d1dae6; max-height:1px; border:none;")
+        sep0.setStyleSheet(f"background:{BORDER}; max-height:1px; border:none;")
         rv.addWidget(sep0)
         rv.addSpacing(4)
 
         # ── Customer
         lbl_cust = QLabel(tr("customer_individual"))
-        lbl_cust.setStyleSheet("font-size:11px; font-weight:600; color:#243347;")
+        lbl_cust.setStyleSheet(f"font-size:11px; font-weight:600; color:{TEXT_LABEL};")
         rv.addWidget(lbl_cust)
         self.cmb_customer = QComboBox()
         self.cmb_customer.addItem(tr("select_customer"), None)
@@ -199,7 +202,7 @@ class NewOrderDialog(QDialog):
 
         # ── Company
         lbl_comp = QLabel(tr("or_company"))
-        lbl_comp.setStyleSheet("font-size:11px; font-weight:600; color:#243347;")
+        lbl_comp.setStyleSheet(f"font-size:11px; font-weight:600; color:{TEXT_LABEL};")
         rv.addWidget(lbl_comp)
         self.cmb_company = QComboBox()
         self.cmb_company.addItem(tr("select_company"), None)
@@ -209,7 +212,7 @@ class NewOrderDialog(QDialog):
 
         # ── Items table
         lbl_items = QLabel(tr("items"))
-        lbl_items.setStyleSheet("font-size:11px; font-weight:600; color:#243347;")
+        lbl_items.setStyleSheet(f"font-size:11px; font-weight:600; color:{TEXT_LABEL};")
         rv.addWidget(lbl_items)
 
         self.tbl_items = QTableWidget(0, 4)
@@ -227,33 +230,33 @@ class NewOrderDialog(QDialog):
         self.tbl_items.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tbl_items.setFixedHeight(160)
         self.tbl_items.setAlternatingRowColors(True)
-        self.tbl_items.setStyleSheet("""
-            QTableWidget {
-                background: #ffffff;
-                color: #0a0f1e;
-                border: 1.5px solid #d1dae6;
+        self.tbl_items.setStyleSheet(f"""
+            QTableWidget {{
+                background: {BG_CARD};
+                color: {TEXT_PRIMARY};
+                border: 1.5px solid {BORDER};
                 border-radius: 8px;
-                gridline-color: #eef2f7;
-                alternate-background-color: #f4f7fb;
-            }
-            QTableWidget::item {
-                color: #0a0f1e;
+                gridline-color: {BG_APP};
+                alternate-background-color: {BG_SUBTLE};
+            }}
+            QTableWidget::item {{
+                color: {TEXT_PRIMARY};
                 padding: 4px 6px;
-            }
-            QHeaderView::section {
+            }}
+            QHeaderView::section {{
                 background: #0c1f3d;
                 color: #e8f0fb;
                 font-size: 11px;
                 font-weight: bold;
                 padding: 5px 6px;
                 border: none;
-            }
+            }}
         """)
         rv.addWidget(self.tbl_items)
 
         # ── Payment method
         lbl_pay = QLabel(tr("payment_method"))
-        lbl_pay.setStyleSheet("font-size:11px; font-weight:600; color:#243347;")
+        lbl_pay.setStyleSheet(f"font-size:11px; font-weight:600; color:{TEXT_LABEL};")
         rv.addWidget(lbl_pay)
         self.cmb_payment = QComboBox()
         for p in ['on_delivery', 'at_order', 'deferred']:
@@ -262,7 +265,7 @@ class NewOrderDialog(QDialog):
 
         # ── Expected pickup
         lbl_dt = QLabel(tr("expected_pickup"))
-        lbl_dt.setStyleSheet("font-size:11px; font-weight:600; color:#243347;")
+        lbl_dt.setStyleSheet(f"font-size:11px; font-weight:600; color:{TEXT_LABEL};")
         rv.addWidget(lbl_dt)
         self.dt_delivery = QDateTimeEdit(QDateTime.currentDateTime().addDays(2))
         self.dt_delivery.setCalendarPopup(True)
@@ -270,7 +273,7 @@ class NewOrderDialog(QDialog):
 
         # ── Discount
         lbl_disc = QLabel(tr("discount_rm"))
-        lbl_disc.setStyleSheet("font-size:11px; font-weight:600; color:#243347;")
+        lbl_disc.setStyleSheet(f"font-size:11px; font-weight:600; color:{TEXT_LABEL};")
         rv.addWidget(lbl_disc)
         self.inp_discount = QDoubleSpinBox()
         self.inp_discount.setPrefix("RM ")
@@ -292,11 +295,11 @@ class NewOrderDialog(QDialog):
         # ── Fixed button bar — always visible at bottom
         btn_bar = QFrame()
         btn_bar.setObjectName("btnBar")
-        btn_bar.setStyleSheet("""
-            QFrame#btnBar {
-                background: #eaeff5;
-                border-top: 1.5px solid #d1dae6;
-            }
+        btn_bar.setStyleSheet(f"""
+            QFrame#btnBar {{
+                background: {BG_SUBTLE};
+                border-top: 1.5px solid {BORDER};
+            }}
         """)
         btn_bar.setFixedHeight(62)
         bl = QHBoxLayout(btn_bar)
@@ -307,22 +310,22 @@ class NewOrderDialog(QDialog):
         btn_cancel.setObjectName("btn_secondary")
         btn_cancel.setMinimumHeight(38)
         btn_cancel.setMinimumWidth(90)
-        btn_cancel.setStyleSheet("""
-            QPushButton { background:#ffffff; color:#1a2740;
-                border:1.5px solid #b0bfcf; border-radius:8px;
-                font-size:13px; }
-            QPushButton:hover { background:#eff6ff; border-color:#2563eb; color:#2563eb; }
+        btn_cancel.setStyleSheet(f"""
+            QPushButton {{ background:{BG_CARD}; color:{TEXT_BODY};
+                border:1.5px solid {BORDER_INPUT}; border-radius:8px;
+                font-size:13px; }}
+            QPushButton:hover {{ background:{BG_SUBTLE}; border-color:{PRIMARY}; color:{PRIMARY}; }}
         """)
         btn_cancel.clicked.connect(self.reject)
 
         btn_save = QPushButton(tr("create_order"))
         btn_save.setMinimumHeight(38)
         btn_save.setMinimumWidth(130)
-        btn_save.setStyleSheet("""
-            QPushButton { background:#2563eb; color:#ffffff;
-                border:none; border-radius:8px; font-size:13px; font-weight:bold; }
-            QPushButton:hover { background:#1d4ed8; }
-            QPushButton:pressed { background:#1e40af; }
+        btn_save.setStyleSheet(f"""
+            QPushButton {{ background:{PRIMARY}; color:#ffffff;
+                border:none; border-radius:8px; font-size:13px; font-weight:bold; }}
+            QPushButton:hover {{ background:{PRIMARY_HOVER}; }}
+            QPushButton:pressed {{ background:{PRIMARY_PRESSED}; }}
         """)
         btn_save.clicked.connect(self._save)
 
@@ -361,8 +364,8 @@ class NewOrderDialog(QDialog):
         self.tbl_items.setRowCount(len(self.selected_items))
         total = 0.0
         for r, it in enumerate(self.selected_items):
-            bg = QColor("#ffffff") if r % 2 == 0 else QColor("#f4f7fb")
-            fg = QColor("#0a0f1e")
+            bg = QColor(BG_CARD) if r % 2 == 0 else QColor(BG_SUBTLE)
+            fg = QColor(TEXT_PRIMARY)
 
             def cell(text, center=False):
                 item = QTableWidgetItem(text)
@@ -582,7 +585,7 @@ class OrderDetailDialog(QDialog):
 
         # ── Left: order details ───────────────────────────────
         left = QWidget()
-        left.setStyleSheet("background:#ffffff;")
+        left.setStyleSheet(f"background:{BG_CARD};")
         lv = QVBoxLayout(left)
         lv.setContentsMargins(20, 20, 20, 20)
         lv.setSpacing(10)
@@ -641,7 +644,7 @@ class OrderDetailDialog(QDialog):
         right = QFrame()
         right.setFixedWidth(300)
         right.setStyleSheet(
-            f"background:#f4f7fb; border-left:1.5px solid {BORDER};")
+            f"background:{BG_SUBTLE}; border-left:1.5px solid {BORDER};")
         rv = QVBoxLayout(right)
         rv.setContentsMargins(20, 20, 20, 20)
         rv.setSpacing(10)
