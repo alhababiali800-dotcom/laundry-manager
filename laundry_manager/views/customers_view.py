@@ -104,7 +104,7 @@ class CustomerDialog(QDialog):
     def _save(self):
         name = self.inp_name.text().strip()
         if not name:
-            QMessageBox.warning(self, tr("error") if "error" in tr("error") else "Error", tr("customer_name_required"))
+            QMessageBox.warning(self, tr("error"), tr("customer_name_required"))
             return
         data = {
             'name': name,
@@ -236,7 +236,11 @@ class CustomersView(QWidget):
 
     def _delete(self, cid, name):
         if confirm_delete(self, f'"{name}"'):
-            CustomerModel.delete(cid)
+            try:
+                CustomerModel.delete(cid)
+            except ValueError as error:
+                QMessageBox.warning(self, tr("error"), tr("delete_failed", error=error))
+                return
             ActivityModel.log(self.user['id'], self.user['username'],
                               'DELETE', 'customer', cid, f"Deleted {name}")
             self.refresh()

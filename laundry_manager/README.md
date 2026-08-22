@@ -15,9 +15,10 @@ pip install PyQt6 bcrypt reportlab Pillow
 python main.py
 ```
 
-**Default login:**
-- Username: `admin`
-- Password: `admin123`
+**First login:**
+
+Use username `admin` with password `admin123` only for the first sign-in. The
+application requires you to set a new password before granting access.
 
 ---
 
@@ -93,7 +94,8 @@ SQLite file is stored at:
 - **Windows:** `%APPDATA%\InternationalLaundries\laundry.db`
 - **Linux/Mac:** `~/.international_laundries/laundry.db`
 
-Back this file up regularly — it contains all your data.
+Back this file up regularly — it contains all your data. Keep this backup in a
+secure location because it includes customer and order information.
 
 ---
 

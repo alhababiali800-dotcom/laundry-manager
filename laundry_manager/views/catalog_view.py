@@ -12,6 +12,7 @@ from PyQt6.QtGui import QPixmap
 from models.all_models import ItemTypeModel, ActivityModel
 from views.base_view import DataTable, make_btn, confirm_delete, page_title, muted_label, dialog_title, h_separator
 from utils.i18n import tr
+from utils.branding import get_user_assets_dir
 
 
 class ItemTypeDialog(QDialog):
@@ -105,7 +106,7 @@ class ItemTypeDialog(QDialog):
             self.lbl_img_preview.setPixmap(
                 pix.scaled(110, 110, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         else:
-            self.lbl_img_preview.setText("No Image")
+            self.lbl_img_preview.setText(tr("no_image"))
 
     def _upload_image(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Image", "", "Image Files (*.png *.jpg *.jpeg)")
@@ -124,8 +125,7 @@ class ItemTypeDialog(QDialog):
             try:
                 # FIX 1: Use absolute path based on this file's location,
                 #         not the current working directory (which can be anywhere).
-                base_dir = Path(__file__).resolve().parent.parent
-                assets_dir = base_dir / "assets" / "items"
+                assets_dir = get_user_assets_dir()
                 assets_dir.mkdir(parents=True, exist_ok=True)
 
                 # FIX 2: Use a timestamp for a unique filename instead of
@@ -263,6 +263,10 @@ class CatalogView(QWidget):
 
     def _delete(self, iid, name):
         if confirm_delete(self, f'"{name}"'):
-            ItemTypeModel.delete(iid)
+            try:
+                ItemTypeModel.delete(iid)
+            except ValueError as error:
+                QMessageBox.warning(self, tr("error"), tr("delete_failed", error=error))
+                return
             ActivityModel.log(self.user['id'], self.user['username'], 'DELETE', 'item_type', iid, f"Deleted {name}")
             self.refresh()

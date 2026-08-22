@@ -13,6 +13,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('assets', 'assets'),
+        ('assets/items', 'assets/items'),
     ],
     hiddenimports=[
         'PyQt6.QtCore',
@@ -23,6 +24,10 @@ a = Analysis(
         'reportlab.pdfgen',
         'reportlab.lib',
         'reportlab.platypus',
+        'qrcode',
+        'qrcode.image',
+        'qrcode.image.pil',
+        'PIL',
     ],
     hookspath=[],
     hooksconfig={},

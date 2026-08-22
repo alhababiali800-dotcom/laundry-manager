@@ -4,10 +4,54 @@ from PyQt6.QtWidgets import (
     QHeaderView, QComboBox, QScrollArea
 )
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor, QFontMetrics, QPainter, QPen
 from database.connection import Database
 from utils.theme import BG_CARD, BORDER, TEXT_PRIMARY, TEXT_MUTED, PRIMARY
 from views.base_view import page_title, muted_label, value_label
 from utils.i18n import tr
+
+
+class BarChart(QFrame):
+    """Small dependency-free chart for report data."""
+    def __init__(self, color="#2563eb", parent=None):
+        super().__init__(parent)
+        self.values = []
+        self.color = QColor(color)
+        self.setMinimumHeight(230)
+        self.setStyleSheet(
+            f"background:{BG_CARD}; border:1px solid {BORDER}; border-radius:12px;"
+        )
+
+    def set_data(self, values):
+        self.values = values
+        self.update()
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.rect().adjusted(38, 16, -18, -34)
+        if not self.values:
+            painter.setPen(QColor(TEXT_MUTED))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, tr("no_report_data"))
+            return
+        maximum = max(value for _, value in self.values) or 1
+        bar_width = max(14, min(52, rect.width() // (len(self.values) * 2)))
+        gap = rect.width() / len(self.values)
+        painter.setPen(QPen(QColor(BORDER), 1))
+        painter.drawLine(rect.bottomLeft(), rect.bottomRight())
+        painter.setPen(QColor(TEXT_MUTED))
+        metrics = QFontMetrics(painter.font())
+        for index, (label, value) in enumerate(self.values):
+            height = int((value / maximum) * max(1, rect.height() - 24))
+            x = int(rect.left() + gap * index + (gap - bar_width) / 2)
+            y = rect.bottom() - height
+            painter.fillRect(x, y, bar_width, height, self.color)
+            shown_label = metrics.elidedText(str(label), Qt.TextElideMode.ElideRight, int(gap - 4))
+            painter.drawText(int(rect.left() + gap * index), rect.bottom() + 5,
+                             int(gap), 18, Qt.AlignmentFlag.AlignHCenter, shown_label)
+            painter.drawText(x, max(0, y - 18), bar_width, 16,
+                             Qt.AlignmentFlag.AlignHCenter, f"{value:,.0f}")
 
 
 class ReportsView(QWidget):
@@ -45,12 +89,16 @@ class ReportsView(QWidget):
         layout.addWidget(self.lbl_monthly_rev)
         self.tbl_monthly_rev = self._make_table([tr("month"), tr("nav_orders"), tr("stat_revenue")])
         layout.addWidget(self.tbl_monthly_rev)
+        self.monthly_chart = BarChart("#2563eb")
+        layout.addWidget(self.monthly_chart)
 
         # Popular items
         self.lbl_popular = self._section(tr("popular_items"))
         layout.addWidget(self.lbl_popular)
         self.tbl_popular = self._make_table([tr("items"), tr("times_ordered"), tr("stat_revenue")])
         layout.addWidget(self.tbl_popular)
+        self.items_chart = BarChart("#15803d")
+        layout.addWidget(self.items_chart)
         
         layout.addStretch()
 
@@ -101,6 +149,7 @@ class ReportsView(QWidget):
             self.tbl_monthly_rev.setItem(r, 2, QTableWidgetItem(f"RM {row['total']:.2f}"))
             self.tbl_monthly_rev.setRowHeight(r, 38)
         self.tbl_monthly_rev.setMaximumHeight(220)
+        self.monthly_chart.set_data([(row['month'], float(row['total'])) for row in reversed(rows2)])
 
         # Popular items
         rows3 = Database.fetchall("""
@@ -114,6 +163,7 @@ class ReportsView(QWidget):
             self.tbl_popular.setItem(r, 2, QTableWidgetItem(f"RM {row['total']:.2f}"))
             self.tbl_popular.setRowHeight(r, 38)
         self.tbl_popular.setMaximumHeight(280)
+        self.items_chart.set_data([(row['item_name'], float(row['cnt'])) for row in rows3])
 
     def _refresh_stats(self):
         while self.stats_grid.count():

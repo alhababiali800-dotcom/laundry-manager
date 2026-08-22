@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from database.schema import initialize_database
-from utils.i18n import init_language
+from utils.i18n import init_language, tr
 from views.login_window import LoginWindow
 from PyQt6.QtGui import QPalette, QColor
 from views.main_window import MainWindow
@@ -66,10 +66,10 @@ def setup_crash_logger():
         from PyQt6.QtWidgets import QMessageBox
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Icon.Critical)
-        msg.setWindowTitle("Unexpected Error")
-        msg.setText("The application encountered an error.")
+        msg.setWindowTitle(tr("unexpected_error"))
+        msg.setText(tr("unexpected_error_message"))
         msg.setDetailedText(error_msg)
-        msg.setInformativeText(f"Details saved to:\n{log_file}")
+        msg.setInformativeText(tr("details_saved", path=log_file))
         msg.exec()
 
     sys.excepthook = handle_exception
@@ -88,7 +88,7 @@ def main():
     try:
         initialize_database()
     except Exception as e:
-        QMessageBox.critical(None, "Database Error", f"Failed to initialize database:\n{e}")
+        QMessageBox.critical(None, tr("database_error"), tr("database_init_failed", error=e))
         sys.exit(1)
 
     show_login()

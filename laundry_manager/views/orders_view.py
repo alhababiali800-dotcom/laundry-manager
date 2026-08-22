@@ -209,23 +209,29 @@ class NewOrderDialog(QDialog):
         for c in CompanyModel.get_all():
             self.cmb_company.addItem(c['name'], c['id'])
         rv.addWidget(self.cmb_company)
+        self.cmb_customer.currentIndexChanged.connect(
+            lambda: self._sync_party_selection(self.cmb_customer, self.cmb_company))
+        self.cmb_company.currentIndexChanged.connect(
+            lambda: self._sync_party_selection(self.cmb_company, self.cmb_customer))
 
         # ── Items table
         lbl_items = QLabel(tr("items"))
         lbl_items.setStyleSheet(f"font-size:11px; font-weight:600; color:{TEXT_LABEL};")
         rv.addWidget(lbl_items)
 
-        self.tbl_items = QTableWidget(0, 4)
+        self.tbl_items = QTableWidget(0, 5)
         self.tbl_items.setHorizontalHeaderLabels(
-            [tr("items"), tr("qty"), tr("total"), ""])
+            [tr("items"), tr("qty"), tr("temporary_price"), tr("total"), ""])
         hh = self.tbl_items.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         hh.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
         hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+        hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
         self.tbl_items.setColumnWidth(1, 44)
-        self.tbl_items.setColumnWidth(2, 76)
-        self.tbl_items.setColumnWidth(3, 32)
+        self.tbl_items.setColumnWidth(2, 95)
+        self.tbl_items.setColumnWidth(3, 76)
+        self.tbl_items.setColumnWidth(4, 32)
         self.tbl_items.verticalHeader().setVisible(False)
         self.tbl_items.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.tbl_items.setFixedHeight(160)
@@ -378,7 +384,16 @@ class NewOrderDialog(QDialog):
             self.tbl_items.setItem(r, 0, cell(
                 f"{it['item_name']} ({tr(it['service_type'])})"))
             self.tbl_items.setItem(r, 1, cell(str(it['quantity']), center=True))
-            self.tbl_items.setItem(r, 2, cell(f"RM {it['total_price']:.2f}"))
+            price_input = QDoubleSpinBox()
+            price_input.setRange(0.01, 999999.99)
+            price_input.setDecimals(2)
+            price_input.setPrefix("RM ")
+            price_input.setValue(float(it['unit_price']))
+            price_input.setToolTip(tr("temporary_price_hint"))
+            price_input.valueChanged.connect(
+                lambda value, idx=r: self._set_temporary_price(idx, value))
+            self.tbl_items.setCellWidget(r, 2, price_input)
+            self.tbl_items.setItem(r, 3, cell(f"RM {it['total_price']:.2f}"))
 
             del_btn = QPushButton("✕")
             del_btn.setFixedSize(26, 26)
@@ -387,7 +402,7 @@ class NewOrderDialog(QDialog):
                 "font-size:13px;background:transparent;}"
                 "QPushButton:hover{color:#991b1b;}")
             del_btn.clicked.connect(lambda _, idx=r: self._remove(idx))
-            self.tbl_items.setCellWidget(r, 3, del_btn)
+            self.tbl_items.setCellWidget(r, 4, del_btn)
             self.tbl_items.setRowHeight(r, 34)
             total += it['total_price']
 
@@ -399,14 +414,32 @@ class NewOrderDialog(QDialog):
         self.selected_items.pop(idx)
         self._refresh_table()
 
+    def _set_temporary_price(self, idx, price):
+        """Apply a price only to this in-progress order; the catalog stays unchanged."""
+        if 0 <= idx < len(self.selected_items):
+            item = self.selected_items[idx]
+            item['unit_price'] = float(price)
+            item['total_price'] = item['quantity'] * item['unit_price']
+            self._refresh_table()
+
+    def _sync_party_selection(self, selected, other):
+        """An order belongs either to an individual customer or to a company."""
+        if selected.currentData() is not None:
+            other.blockSignals(True)
+            other.setCurrentIndex(0)
+            other.blockSignals(False)
+            other.setEnabled(False)
+        else:
+            other.setEnabled(True)
+
     def _save(self):
         if not self.selected_items:
-            QMessageBox.warning(self, tr("error"), "Please add at least one item.")
+            QMessageBox.warning(self, tr("error"), tr("order_items_required"))
             return
         cust_id = self.cmb_customer.currentData()
         comp_id = self.cmb_company.currentData()
         if not cust_id and not comp_id:
-            QMessageBox.warning(self, tr("error"), "Please select a customer or company.")
+            QMessageBox.warning(self, tr("error"), tr("order_customer_required"))
             return
 
         try:
@@ -422,7 +455,7 @@ class NewOrderDialog(QDialog):
                     "yyyy-MM-dd HH:mm:ss"),
             )
         except Exception as e:
-            QMessageBox.critical(self, tr("error"), f"Failed to save order:\n{e}")
+            QMessageBox.critical(self, tr("error"), tr("order_save_failed", error=e))
             return
 
         ActivityModel.log(self.user['id'], self.user['username'],
@@ -660,7 +693,7 @@ class OrderDetailDialog(QDialog):
         icon.setStyleSheet("font-size:56px; padding:20px 0;")
         rv.addWidget(icon)
 
-        msg = QLabel("Invoice is ready for viewing.")
+        msg = QLabel(tr("invoice_ready"))
         msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
         msg.setWordWrap(True)
         msg.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:13px;")
@@ -692,4 +725,4 @@ class OrderDetailDialog(QDialog):
             if inv:
                 InvoiceDetailDialog(self, self.user, inv).exec()
                 return
-        QMessageBox.warning(self, tr("error"), "No invoice found for this order.")
+        QMessageBox.warning(self, tr("error"), tr("invoice_not_found"))

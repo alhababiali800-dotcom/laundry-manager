@@ -16,6 +16,7 @@ from utils.branding import get_logo_path, BUSINESS_NAME
 from utils.theme import PRIMARY, NAVY_DARK, TEXT_MUTED
 from utils.i18n import tr
 from utils.pdf_generator import generate_invoice_pdf
+from utils.qr_code import generate_invoice_qr
 
 
 class InvoiceDetailDialog(QDialog):
@@ -67,6 +68,17 @@ class InvoiceDetailDialog(QDialog):
         biz_name.setStyleSheet("font-size: 18px; font-weight: bold; color: black;")
         header.addWidget(biz_name, alignment=Qt.AlignmentFlag.AlignCenter)
         header.addWidget(QLabel(tr("app_tagline")), alignment=Qt.AlignmentFlag.AlignCenter)
+        try:
+            qr_path = generate_invoice_qr(self.invoice)
+            qr_label = QLabel()
+            qr_label.setPixmap(QPixmap(str(qr_path)).scaled(
+                92, 92, Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            ))
+            qr_label.setToolTip(tr("invoice_qr_hint"))
+            header.addWidget(qr_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        except Exception:
+            pass
         paper_layout.addLayout(header)
         
         paper_layout.addWidget(h_separator())
@@ -115,7 +127,7 @@ class InvoiceDetailDialog(QDialog):
         paper_layout.addLayout(totals)
         
         paper_layout.addStretch()
-        paper_layout.addWidget(QLabel("THANK YOU!"), alignment=Qt.AlignmentFlag.AlignCenter)
+        paper_layout.addWidget(QLabel(tr("thank_you")), alignment=Qt.AlignmentFlag.AlignCenter)
 
         preview_layout.addWidget(paper)
         scroll.setWidget(preview_container)
@@ -164,11 +176,11 @@ class InvoiceDetailDialog(QDialog):
             if path and os.path.exists(path):
                 os.startfile(path) if os.name == 'nt' else subprocess.run(['xdg-open', path])
             else:
-                QMessageBox.warning(self, tr("error"), "Generated file not found.")
+                QMessageBox.warning(self, tr("error"), tr("generated_file_not_found"))
         except Exception as e:
             import logging
             logging.error(f"Print failed: {e}")
-            QMessageBox.warning(self, tr("error"), f"Could not open print preview: {str(e)}")
+            QMessageBox.warning(self, tr("error"), tr("print_preview_failed", error=str(e)))
 
     def _save_pdf(self):
         from PyQt6.QtWidgets import QFileDialog
@@ -177,15 +189,15 @@ class InvoiceDetailDialog(QDialog):
             if not path or not os.path.exists(path):
                 raise FileNotFoundError("Generated PDF path not found.")
             
-            save_path, _ = QFileDialog.getSaveFileName(self, "Save PDF", f"Invoice_{self.invoice['invoice_number']}.pdf", "PDF Files (*.pdf)")
+            save_path, _ = QFileDialog.getSaveFileName(self, tr("save_pdf"), f"Invoice_{self.invoice['invoice_number']}.pdf", tr("pdf_files"))
             if save_path:
                 import shutil
                 shutil.copy2(path, save_path)
-                QMessageBox.information(self, tr("success"), f"PDF Saved to {save_path}")
+                QMessageBox.information(self, tr("success"), tr("pdf_saved", path=save_path))
         except Exception as e:
             import logging
             logging.error(f"Failed to save PDF: {e}")
-            QMessageBox.critical(self, tr("error"), f"Could not save PDF: {str(e)}")
+            QMessageBox.critical(self, tr("error"), tr("pdf_save_failed", error=str(e)))
 
 
 class InvoicesView(QWidget):

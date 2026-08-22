@@ -177,5 +177,9 @@ class UsersView(QWidget):
 
     def _delete(self, uid, name):
         if confirm_delete(self, f'user "{name}"'):
-            UserModel.delete(uid)
+            try:
+                UserModel.delete(uid)
+            except ValueError as error:
+                QMessageBox.warning(self, tr("error"), tr("delete_failed", error=error))
+                return
             self.refresh()

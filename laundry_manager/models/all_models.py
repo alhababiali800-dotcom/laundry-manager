@@ -44,10 +44,25 @@ class UserModel:
     @staticmethod
     def change_password(uid, new_password):
         pw = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
-        Database.execute("UPDATE users SET password_hash=? WHERE id=?", (pw, uid))
+        Database.execute(
+            "UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?",
+            (pw, uid),
+        )
 
     @staticmethod
     def delete(uid):
+        user = UserModel.get_by_id(uid)
+        if not user:
+            raise ValueError("User not found.")
+        if user['role'] == 'admin':
+            active_admins = Database.fetchone(
+                "SELECT COUNT(*) AS c FROM users WHERE role='admin' AND is_active=1"
+            )
+            if active_admins and active_admins['c'] <= 1:
+                raise ValueError("The last active administrator cannot be deleted.")
+        _ensure_not_referenced('user', uid, [
+            ('orders', 'created_by'), ('activity_log', 'user_id'),
+        ])
         Database.execute("DELETE FROM users WHERE id=?", (uid,))
 
 
@@ -90,6 +105,9 @@ class CustomerModel:
 
     @staticmethod
     def delete(cid):
+        _ensure_not_referenced('customer', cid, [
+            ('orders', 'customer_id'), ('invoices', 'customer_id'),
+        ])
         Database.execute("DELETE FROM customers WHERE id=?", (cid,))
 
     @staticmethod
@@ -132,6 +150,10 @@ class CompanyModel:
 
     @staticmethod
     def delete(cid):
+        _ensure_not_referenced('company', cid, [
+            ('customers', 'company_id'), ('contracts', 'company_id'),
+            ('orders', 'company_id'), ('invoices', 'company_id'),
+        ])
         Database.execute("DELETE FROM companies WHERE id=?", (cid,))
 
     @staticmethod
@@ -168,6 +190,7 @@ class ItemTypeModel:
 
     @staticmethod
     def delete(iid):
+        _ensure_not_referenced('item type', iid, [('order_items', 'item_type_id')])
         Database.execute("DELETE FROM item_types WHERE id=?", (iid,))
 
 
@@ -181,6 +204,15 @@ def _gen_order_number():
     )
     seq = (r['c'] if r else 0) + 1
     return f"{prefix}{seq:04d}"
+
+
+def _ensure_not_referenced(label, record_id, references):
+    for table, column in references:
+        row = Database.fetchone(
+            f"SELECT COUNT(*) AS c FROM {table} WHERE {column}=?", (record_id,)
+        )
+        if row and row['c']:
+            raise ValueError(f"Cannot delete this {label} because it is used by existing records.")
 
 
 class OrderModel:
@@ -227,31 +259,45 @@ class OrderModel:
     @staticmethod
     def create(customer_id, company_id, items, payment_method, discount, notes, created_by,
                expected_delivery=None):
-        order_number = _gen_order_number()
-        total = sum(it['total_price'] for it in items)
+        if customer_id and company_id:
+            raise ValueError("Select either a customer or a company, not both.")
+        if not customer_id and not company_id:
+            raise ValueError("Select a customer or a company.")
+        if not items:
+            raise ValueError("An order must include at least one item.")
+        total = sum(float(it['total_price']) for it in items)
+        discount = float(discount)
+        if total <= 0:
+            raise ValueError("Order total must be greater than zero.")
+        if discount < 0 or discount > total:
+            raise ValueError("Discount must be between zero and the order total.")
+        for item in items:
+            if int(item['quantity']) <= 0 or float(item['unit_price']) < 0 or float(item['total_price']) < 0:
+                raise ValueError("Order item quantities and prices must be valid.")
         total_after = total - discount
-        oid = Database.lastrowid(
-            """INSERT INTO orders
-               (order_number,customer_id,company_id,total_amount,discount,payment_method,notes,
-                created_by,expected_delivery)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
-            (order_number, customer_id or None, company_id or None,
-             total_after, discount, payment_method, notes, created_by, expected_delivery)
-        )
-        for it in items:
-            Database.execute(
-                """INSERT INTO order_items (order_id,item_type_id,item_name,service_type,quantity,unit_price,total_price)
-                   VALUES (?,?,?,?,?,?,?)""",
-                (oid, it.get('item_type_id'), it['item_name'], it['service_type'],
-                 it['quantity'], it['unit_price'], it['total_price'])
+        with Database.transaction():
+            order_number = _gen_order_number()
+            oid = Database.lastrowid(
+                """INSERT INTO orders
+                   (order_number,customer_id,company_id,total_amount,discount,payment_method,notes,
+                    created_by,expected_delivery)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                (order_number, customer_id or None, company_id or None,
+                 total_after, discount, payment_method, notes, created_by, expected_delivery)
             )
-        # Auto create invoice
-        inv_num = f"INV-{order_number[4:]}"
-        Database.execute(
-            """INSERT INTO invoices (invoice_number,customer_id,company_id,order_id,total_amount,status)
-               VALUES (?,?,?,?,?,?)""",
-            (inv_num, customer_id or None, company_id or None, oid, total_after, 'unpaid')
-        )
+            for it in items:
+                Database.execute(
+                    """INSERT INTO order_items (order_id,item_type_id,item_name,service_type,quantity,unit_price,total_price)
+                       VALUES (?,?,?,?,?,?,?)""",
+                    (oid, it.get('item_type_id'), it['item_name'], it['service_type'],
+                     it['quantity'], it['unit_price'], it['total_price'])
+                )
+            inv_num = f"INV-{order_number[4:]}"
+            Database.execute(
+                """INSERT INTO invoices (invoice_number,customer_id,company_id,order_id,total_amount,status)
+                   VALUES (?,?,?,?,?,?)""",
+                (inv_num, customer_id or None, company_id or None, oid, total_after, 'unpaid')
+            )
         return oid, order_number
 
     @staticmethod
@@ -268,17 +314,23 @@ class OrderModel:
     def record_payment(oid, amount):
         order = OrderModel.get_by_id(oid)
         if not order:
-            return
-        new_paid = order['paid_amount'] + amount
+            raise ValueError("Order not found.")
+        amount = float(amount)
+        if amount <= 0:
+            raise ValueError("Payment amount must be greater than zero.")
+        new_paid = float(order['paid_amount']) + amount
+        if new_paid > float(order['total_amount']):
+            raise ValueError("Payment amount exceeds the remaining balance.")
         status = 'paid' if new_paid >= order['total_amount'] else 'partial'
-        Database.execute(
-            "UPDATE orders SET paid_amount=?, payment_status=? WHERE id=?",
-            (new_paid, status, oid)
-        )
-        Database.execute(
-            "UPDATE invoices SET paid_amount=?, status=? WHERE order_id=?",
-            (new_paid, status, oid)
-        )
+        with Database.transaction():
+            Database.execute(
+                "UPDATE orders SET paid_amount=?, payment_status=? WHERE id=?",
+                (new_paid, status, oid)
+            )
+            Database.execute(
+                "UPDATE invoices SET paid_amount=?, status=? WHERE order_id=?",
+                (new_paid, status, oid)
+            )
 
     @staticmethod
     def count_by_status():
@@ -318,10 +370,12 @@ class InvoiceModel:
             LEFT JOIN companies co ON i.company_id = co.id
             LEFT JOIN orders o ON i.order_id = o.id
         """
+        params = []
         if status_filter and status_filter != 'all':
-            sql += f" WHERE i.status='{status_filter}'"
+            sql += " WHERE i.status=?"
+            params.append(status_filter)
         sql += " ORDER BY i.created_at DESC"
-        return Database.fetchall(sql)
+        return Database.fetchall(sql, params)
 
     @staticmethod
     def get_by_id(iid):

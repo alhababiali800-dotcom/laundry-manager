@@ -1,5 +1,6 @@
 import sqlite3
 import os
+from contextlib import contextmanager
 from pathlib import Path
 
 # Store DB in user's AppData (Windows) or home dir
@@ -15,6 +16,7 @@ DB_PATH = get_db_path()
 
 class Database:
     _conn = None
+    _transaction_depth = 0
 
     @classmethod
     def get(cls):
@@ -30,8 +32,33 @@ class Database:
         conn = cls.get()
         cur = conn.cursor()
         cur.execute(query, params)
-        conn.commit()
+        if cls._transaction_depth == 0:
+            conn.commit()
         return cur
+
+    @classmethod
+    @contextmanager
+    def transaction(cls):
+        """Run related writes atomically and roll them back on failure."""
+        conn = cls.get()
+        if cls._transaction_depth:
+            cls._transaction_depth += 1
+            try:
+                yield conn
+            finally:
+                cls._transaction_depth -= 1
+            return
+        conn.execute("BEGIN IMMEDIATE")
+        cls._transaction_depth = 1
+        try:
+            yield conn
+        except Exception:
+            conn.rollback()
+            raise
+        else:
+            conn.commit()
+        finally:
+            cls._transaction_depth = 0
 
     @classmethod
     def fetchall(cls, query, params=()):

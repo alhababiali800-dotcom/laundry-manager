@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QLineEdit, QPushButton, QFrame, QMessageBox, QSizePolicy,
+    QLineEdit, QPushButton, QFrame, QMessageBox, QSizePolicy, QInputDialog,
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap, QFont
@@ -198,12 +198,40 @@ class LoginWindow(QWidget):
         self.btn_login.setEnabled(True)
 
         if user:
+            if user.get('must_change_password') and not self._change_initial_password(user):
+                self._show_error(tr("initial_password_cancelled"))
+                return
             ActivityModel.log(user['id'], user['username'], 'LOGIN', description='User logged in')
             self.login_successful.emit(user)
         else:
             self._show_error(tr("login_error_invalid"))
             self.input_password.clear()
             self.input_password.setFocus()
+
+    def _change_initial_password(self, user):
+        QMessageBox.information(self, tr("initial_password_title"), tr("initial_password_message"))
+        while True:
+            password, ok = QInputDialog.getText(
+                self, tr("initial_password_title"), tr("new_password"),
+                QLineEdit.EchoMode.Password,
+            )
+            if not ok:
+                return False
+            if len(password) < 8:
+                QMessageBox.warning(self, tr("error"), tr("password_minimum_8"))
+                continue
+            confirm, ok = QInputDialog.getText(
+                self, tr("initial_password_title"), tr("confirm_password"),
+                QLineEdit.EchoMode.Password,
+            )
+            if not ok:
+                return False
+            if password != confirm:
+                QMessageBox.warning(self, tr("error"), tr("passwords_mismatch"))
+                continue
+            UserModel.change_password(user['id'], password)
+            user['must_change_password'] = 0
+            return True
 
     def _show_error(self, msg):
         self.lbl_error.setText(msg)

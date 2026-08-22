@@ -24,7 +24,12 @@ NAV_ITEMS = [
     ("⚙️", "nav_settings", "settings"),
 ]
 
-ADMIN_ONLY = {"users", "activity"}
+PAGE_ROLES = {
+    "users": {"admin"},
+    "activity": {"admin"},
+    # Catalog prices are permanent and therefore only managers or admins may edit them.
+    "catalog": {"admin", "manager"},
+}
 
 
 class MainWindow(QMainWindow):
@@ -134,7 +139,7 @@ class MainWindow(QMainWindow):
         layout.addSpacing(4)
 
         for icon, key, page in NAV_ITEMS:
-            if page in ADMIN_ONLY and self.user.get("role") != "admin":
+            if page in PAGE_ROLES and self.user.get("role") not in PAGE_ROLES[page]:
                 continue
             btn = QPushButton(f"  {icon}   {tr(key)}")
             btn.setObjectName("nav_btn")

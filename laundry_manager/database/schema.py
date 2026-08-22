@@ -1,4 +1,5 @@
 import bcrypt
+
 from database.connection import Database
 
 def initialize_database():
@@ -16,6 +17,7 @@ def initialize_database():
         email TEXT,
         phone TEXT,
         is_active INTEGER DEFAULT 1,
+        must_change_password INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )""")
 
@@ -157,13 +159,26 @@ def _run_migrations(cursor):
     if 'image_path' not in item_cols:
         cursor.execute("ALTER TABLE item_types ADD COLUMN image_path TEXT")
 
+    cursor.execute("PRAGMA table_info(users)")
+    user_cols = {row[1] for row in cursor.fetchall()}
+    if 'must_change_password' not in user_cols:
+        cursor.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0")
+
+    # Existing installations that still use the documented default password
+    # must change it on their next login.
+    admin = cursor.execute(
+        "SELECT id, password_hash FROM users WHERE username='admin'"
+    ).fetchone()
+    if admin and bcrypt.checkpw(b'admin123', admin[1].encode()):
+        cursor.execute("UPDATE users SET must_change_password=1 WHERE id=?", (admin[0],))
+
 
 def _seed_default_data():
     # Admin user
     pw = bcrypt.hashpw(b'admin123', bcrypt.gensalt()).decode()
     Database.execute(
-        "INSERT INTO users (username, password_hash, full_name, role) VALUES (?,?,?,?)",
-        ('admin', pw, 'System Admin', 'admin')
+        "INSERT INTO users (username, password_hash, full_name, role, must_change_password) VALUES (?,?,?,?,?)",
+        ('admin', pw, 'System Admin', 'admin', 1)
     )
 
     # Sample item types

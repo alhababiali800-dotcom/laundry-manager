@@ -73,7 +73,7 @@ class CompanyDialog(QDialog):
     def _save(self):
         name = self.inp_name.text().strip()
         if not name:
-            QMessageBox.warning(self, tr("error") if "error" in tr("error") else "Error", tr("company_name_required"))
+            QMessageBox.warning(self, tr("error"), tr("company_name_required"))
             return
         data = dict(
             name=name,
@@ -175,7 +175,11 @@ class CompaniesView(QWidget):
 
     def _delete(self, cid, name):
         if confirm_delete(self, f'"{name}"'):
-            CompanyModel.delete(cid)
+            try:
+                CompanyModel.delete(cid)
+            except ValueError as error:
+                QMessageBox.warning(self, tr("error"), tr("delete_failed", error=error))
+                return
             ActivityModel.log(self.user['id'], self.user['username'], 'DELETE', 'company', cid, f"Deleted {name}")
             self.refresh()
 
@@ -273,7 +277,7 @@ class ContractDialog(QDialog):
     def _save(self):
         title = self.inp_title.text().strip()
         if not title or self.cmb_company.count() == 0:
-            QMessageBox.warning(self, tr("error") if "error" in tr("error") else "Error", tr("contract_title_required"))
+            QMessageBox.warning(self, tr("error"), tr("contract_title_required"))
             return
         data = dict(
             company_id=self.cmb_company.currentData(),
@@ -371,6 +375,10 @@ class ContractsView(QWidget):
 
     def _delete(self, cid, name):
         if confirm_delete(self, f'"{name}"'):
-            ContractModel.delete(cid)
+            try:
+                ContractModel.delete(cid)
+            except ValueError as error:
+                QMessageBox.warning(self, tr("error"), tr("delete_failed", error=error))
+                return
             ActivityModel.log(self.user['id'], self.user['username'], 'DELETE', 'contract', cid, f"Deleted {name}")
             self.refresh()

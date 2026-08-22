@@ -1,45 +1,43 @@
-"""
-Unified color palette — dark mode
-"""
+"""Unified light color palette with high-contrast input controls."""
 
 # Brand / navy
-NAVY_DARK = "#0f2744"
-NAVY_MID = "#1e3a5f"
+NAVY_DARK = "#0c1f3d"
+NAVY_MID = "#17325a"
 NAVY_SLATE = "#0f172a"
 
 # Primary action (buttons, focus, active nav) — brightened for dark bg contrast
-PRIMARY = "#3b82f6"
-PRIMARY_HOVER = "#60a5fa"
-PRIMARY_PRESSED = "#2563eb"
+PRIMARY = "#2563eb"
+PRIMARY_HOVER = "#1d4ed8"
+PRIMARY_PRESSED = "#1e40af"
 
-# Surfaces (dark)
-BG_APP = "#0b1220"
-BG_CARD = "#151f30"
-BG_SUBTLE = "#111a2b"
+# Surfaces
+BG_APP = "#eef2f7"
+BG_CARD = "#ffffff"
+BG_SUBTLE = "#f4f7fb"
 
 # Borders
-BORDER = "#2a374d"
-BORDER_INPUT = "#3d4d68"
+BORDER = "#d1dae6"
+BORDER_INPUT = "#b0bfcf"
 
-# Text (light on dark)
-TEXT_PRIMARY = "#f8fafc"
-TEXT_BODY = "#e2e8f0"
-TEXT_LABEL = "#cbd5e1"
-TEXT_MUTED = "#94a3b8"
-TEXT_PLACEHOLDER = "#64748b"
-TEXT_ON_DARK = "#f8fafc"
-TEXT_ON_DARK_MUTED = "#cbd5e1"
+# Text — dark on light surfaces
+TEXT_PRIMARY = "#0a0f1e"
+TEXT_BODY = "#1a2740"
+TEXT_LABEL = "#243347"
+TEXT_MUTED = "#52657a"
+TEXT_PLACEHOLDER = "#8fa3b8"
+TEXT_ON_DARK = "#f0f6ff"
+TEXT_ON_DARK_MUTED = "#b8cce0"
 
 # Sidebar
 SIDEBAR_GRADIENT = (
-    "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0f2744, stop:1 #1e3a5f)"
+    "qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0c1f3d, stop:0.6 #17325a, stop:1 #1e4070)"
 )
 
 # Semantic
-SUCCESS = "#22c55e"
-WARNING = "#f59e0b"
-DANGER = "#ef4444"
-INFO_BG = "#1e3a5f"
+SUCCESS = "#15803d"
+WARNING = "#b45309"
+DANGER = "#c81e1e"
+INFO_BG = "#dbeafe"
 
 # Radius
 RADIUS_SM = "8px"

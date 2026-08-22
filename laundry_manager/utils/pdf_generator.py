@@ -6,6 +6,7 @@ import os
 import tempfile
 from datetime import datetime
 from utils.branding import BUSINESS_NAME, BUSINESS_TAGLINE, get_logo_path
+from utils.qr_code import generate_invoice_qr
 
 def generate_invoice_pdf(invoice: dict, order_items: list = None,
                          order: dict = None) -> str | None:
@@ -85,6 +86,13 @@ def generate_invoice_pdf(invoice: dict, order_items: list = None,
             elements.append(Spacer(1, 2 * mm))
         except Exception:
             pass
+    try:
+        qr = Image(str(generate_invoice_qr(invoice)), width=18 * mm, height=18 * mm)
+        qr.hAlign = 'CENTER'
+        elements.append(qr)
+        elements.append(Spacer(1, 2 * mm))
+    except Exception:
+        pass
     
     elements.append(Paragraph(BUSINESS_NAME.upper(), header_style))
     elements.append(Paragraph(BUSINESS_TAGLINE, tagline_style))

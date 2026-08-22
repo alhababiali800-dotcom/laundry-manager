@@ -599,21 +599,22 @@ LOGIN_STYLE = f"""
         font-size: 12px;
         font-weight: 600;
     }}
-    QLineEdit {{
+    QWidget#login_root QLineEdit {{
         border: 1.5px solid {BORDER_INPUT};
         border-radius: 10px;
         padding: 12px 14px;
         font-size: 14px;
-        color: {TEXT_PRIMARY};
-        background: {BG_CARD};
+        color: #000000;
+        background: #ffffff;
         selection-background-color: {PRIMARY};
         selection-color: #ffffff;
     }}
-    QLineEdit:focus {{
+    QWidget#login_root QLineEdit:focus {{
         border-color: {PRIMARY};
-        background: #fafcff;
+        color: #000000;
+        background: #ffffff;
     }}
-    QLineEdit::placeholder {{
+    QWidget#login_root QLineEdit::placeholder {{
         color: {TEXT_PLACEHOLDER};
     }}
     QPushButton#btn_login {{
