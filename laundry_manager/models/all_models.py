@@ -69,28 +69,32 @@ class UserModel:
 # ─────────────────────────── CUSTOMER ────────────────────────
 class CustomerModel:
     @staticmethod
-    def get_all():
+    def get_all(limit=500, offset=0):
+        """Get customers with pagination to prevent memory bloat."""
         return Database.fetchall("""
             SELECT c.*, co.name as company_name
             FROM customers c
             LEFT JOIN companies co ON c.company_id = co.id
             ORDER BY c.name
-        """)
+            LIMIT ? OFFSET ?
+        """, (limit, offset))
 
     @staticmethod
     def get_by_id(cid):
         return Database.fetchone("SELECT * FROM customers WHERE id=?", (cid,))
 
     @staticmethod
-    def search(q):
+    def search(q, limit=100):
+        """Server-side search using database indexes."""
         q = f"%{q}%"
         return Database.fetchall(
-            "SELECT * FROM customers WHERE name LIKE ? OR phone LIKE ? OR email LIKE ? ORDER BY name",
-            (q, q, q)
+            "SELECT * FROM customers WHERE name LIKE ? OR phone LIKE ? OR email LIKE ? ORDER BY name LIMIT ?",
+            (q, q, q, limit)
         )
 
     @staticmethod
     def create(name, phone, email, address, customer_type, company_id, notes):
+        Database.clear_cache('customers_all')  # Invalidate cache
         return Database.lastrowid(
             "INSERT INTO customers (name,phone,email,address,customer_type,company_id,notes) VALUES (?,?,?,?,?,?,?)",
             (name, phone, email, address, customer_type, company_id or None, notes)
@@ -98,6 +102,7 @@ class CustomerModel:
 
     @staticmethod
     def update(cid, name, phone, email, address, customer_type, company_id, notes):
+        Database.clear_cache('customers_all')  # Invalidate cache
         Database.execute(
             "UPDATE customers SET name=?,phone=?,email=?,address=?,customer_type=?,company_id=?,notes=? WHERE id=?",
             (name, phone, email, address, customer_type, company_id or None, notes, cid)
@@ -105,6 +110,7 @@ class CustomerModel:
 
     @staticmethod
     def delete(cid):
+        Database.clear_cache('customers_all')  # Invalidate cache
         _ensure_not_referenced('customer', cid, [
             ('orders', 'customer_id'), ('invoices', 'customer_id'),
         ])
@@ -118,24 +124,35 @@ class CustomerModel:
 
 # ─────────────────────────── COMPANY ─────────────────────────
 class CompanyModel:
+    _cache = None
+    _cache_valid = False
+
     @staticmethod
     def get_all():
-        return Database.fetchall("SELECT * FROM companies ORDER BY name")
+        """Cache company list since it's rarely changed and frequently accessed."""
+        if CompanyModel._cache_valid and CompanyModel._cache is not None:
+            return CompanyModel._cache
+        
+        CompanyModel._cache = Database.fetchall("SELECT * FROM companies ORDER BY name")
+        CompanyModel._cache_valid = True
+        return CompanyModel._cache
 
     @staticmethod
     def get_by_id(cid):
         return Database.fetchone("SELECT * FROM companies WHERE id=?", (cid,))
 
     @staticmethod
-    def search(q):
+    def search(q, limit=100):
+        """Server-side search using database indexes."""
         q = f"%{q}%"
         return Database.fetchall(
-            "SELECT * FROM companies WHERE name LIKE ? OR contact_person LIKE ? ORDER BY name",
-            (q, q)
+            "SELECT * FROM companies WHERE name LIKE ? OR contact_person LIKE ? ORDER BY name LIMIT ?",
+            (q, q, limit)
         )
 
     @staticmethod
     def create(name, contact_person, phone, email, address="", notes=""):
+        CompanyModel._cache_valid = False  # Invalidate cache
         return Database.lastrowid(
             "INSERT INTO companies (name,contact_person,phone,email,address,notes) VALUES (?,?,?,?,?,?)",
             (name, contact_person, phone, email, address, notes)
@@ -143,6 +160,7 @@ class CompanyModel:
 
     @staticmethod
     def update(cid, name, contact_person, phone, email, address, notes):
+        CompanyModel._cache_valid = False  # Invalidate cache
         Database.execute(
             "UPDATE companies SET name=?,contact_person=?,phone=?,email=?,address=?,notes=? WHERE id=?",
             (name, contact_person, phone, email, address, notes, cid)
@@ -150,6 +168,7 @@ class CompanyModel:
 
     @staticmethod
     def delete(cid):
+        CompanyModel._cache_valid = False  # Invalidate cache
         _ensure_not_referenced('company', cid, [
             ('customers', 'company_id'), ('contracts', 'company_id'),
             ('orders', 'company_id'), ('invoices', 'company_id'),
@@ -164,10 +183,18 @@ class CompanyModel:
 
 # ─────────────────────────── ITEM TYPE ───────────────────────
 class ItemTypeModel:
+    _cache = None
+    _cache_valid = False
+
     @staticmethod
     def get_all(active_only=True):
+        """Cache item types since catalog rarely changes."""
         if active_only:
-            return Database.fetchall("SELECT * FROM item_types WHERE is_active=1 ORDER BY name")
+            if ItemTypeModel._cache_valid and ItemTypeModel._cache is not None:
+                return ItemTypeModel._cache
+            ItemTypeModel._cache = Database.fetchall("SELECT * FROM item_types WHERE is_active=1 ORDER BY name")
+            ItemTypeModel._cache_valid = True
+            return ItemTypeModel._cache
         return Database.fetchall("SELECT * FROM item_types ORDER BY name")
 
     @staticmethod
@@ -176,6 +203,7 @@ class ItemTypeModel:
 
     @staticmethod
     def create(name, wash_price, iron_price, dry_clean_price, image_path=None):
+        ItemTypeModel._cache_valid = False  # Invalidate cache
         return Database.lastrowid(
             "INSERT INTO item_types (name,wash_price,iron_price,dry_clean_price,image_path) VALUES (?,?,?,?,?)",
             (name, wash_price, iron_price, dry_clean_price, image_path)
@@ -183,6 +211,7 @@ class ItemTypeModel:
 
     @staticmethod
     def update(iid, name, wash_price, iron_price, dry_clean_price, is_active, image_path=None):
+        ItemTypeModel._cache_valid = False  # Invalidate cache
         Database.execute(
             "UPDATE item_types SET name=?,wash_price=?,iron_price=?,dry_clean_price=?,is_active=?,image_path=? WHERE id=?",
             (name, wash_price, iron_price, dry_clean_price, is_active, image_path, iid)
@@ -190,6 +219,7 @@ class ItemTypeModel:
 
     @staticmethod
     def delete(iid):
+        ItemTypeModel._cache_valid = False  # Invalidate cache
         _ensure_not_referenced('item type', iid, [('order_items', 'item_type_id')])
         Database.execute("DELETE FROM item_types WHERE id=?", (iid,))
 
@@ -217,7 +247,8 @@ def _ensure_not_referenced(label, record_id, references):
 
 class OrderModel:
     @staticmethod
-    def get_all(status_filter=None, search=None):
+    def get_all(status_filter=None, search=None, limit=500, offset=0):
+        """Get orders with pagination and server-side filtering."""
         sql = """
             SELECT o.*,
                    c.name as customer_name,
@@ -239,7 +270,8 @@ class OrderModel:
             params += [s, s, s]
         if where:
             sql += " WHERE " + " AND ".join(where)
-        sql += " ORDER BY o.created_at DESC"
+        sql += " ORDER BY o.created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
         return Database.fetchall(sql, params)
 
     @staticmethod
@@ -404,7 +436,7 @@ class OrderModel:
 # ─────────────────────────── INVOICE ─────────────────────────
 class InvoiceModel:
     @staticmethod
-    def get_all(status_filter=None):
+    def get_all(status_filter=None, limit=500, offset=0):
         sql = """
             SELECT i.*, c.name as customer_name, co.name as company_name, o.order_number
             FROM invoices i
@@ -416,7 +448,8 @@ class InvoiceModel:
         if status_filter and status_filter != 'all':
             sql += " WHERE i.status=?"
             params.append(status_filter)
-        sql += " ORDER BY i.created_at DESC"
+        sql += " ORDER BY i.created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
         return Database.fetchall(sql, params)
 
     @staticmethod
@@ -439,13 +472,14 @@ class InvoiceModel:
 # ─────────────────────────── CONTRACT ────────────────────────
 class ContractModel:
     @staticmethod
-    def get_all():
+    def get_all(limit=500, offset=0):
         return Database.fetchall("""
             SELECT ct.*, co.name as company_name
             FROM contracts ct
             LEFT JOIN companies co ON ct.company_id = co.id
             ORDER BY ct.created_at DESC
-        """)
+            LIMIT ? OFFSET ?
+        """, (limit, offset))
 
     @staticmethod
     def get_by_id(cid):

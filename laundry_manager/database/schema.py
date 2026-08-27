@@ -140,12 +140,63 @@ def initialize_database():
     )""")
 
     _run_migrations(cursor)
+    _create_indexes(cursor)
     db.commit()
 
     # Seed default admin if no users exist
     count = Database.fetchone("SELECT COUNT(*) as c FROM users")
     if count and count['c'] == 0:
         _seed_default_data()
+
+def _create_indexes(cursor):
+    """Create indexes for frequently queried columns to improve performance."""
+    indexes = [
+        # Users
+        "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)",
+        "CREATE INDEX IF NOT EXISTS idx_users_is_active ON users(is_active)",
+        
+        # Customers
+        "CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name)",
+        "CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone)",
+        "CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email)",
+        "CREATE INDEX IF NOT EXISTS idx_customers_company_id ON customers(company_id)",
+        
+        # Companies
+        "CREATE INDEX IF NOT EXISTS idx_companies_name ON companies(name)",
+        
+        # Orders
+        "CREATE INDEX IF NOT EXISTS idx_orders_order_number ON orders(order_number)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_customer_id ON orders(customer_id)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_company_id ON orders(company_id)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at)",
+        "CREATE INDEX IF NOT EXISTS idx_orders_created_by ON orders(created_by)",
+        
+        # Order Items
+        "CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id)",
+        "CREATE INDEX IF NOT EXISTS idx_order_items_item_type_id ON order_items(item_type_id)",
+        
+        # Invoices
+        "CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number)",
+        "CREATE INDEX IF NOT EXISTS idx_invoices_order_id ON invoices(order_id)",
+        "CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status)",
+        "CREATE INDEX IF NOT EXISTS idx_invoices_customer_id ON invoices(customer_id)",
+        "CREATE INDEX IF NOT EXISTS idx_invoices_company_id ON invoices(company_id)",
+        
+        # Activity Log
+        "CREATE INDEX IF NOT EXISTS idx_activity_log_user_id ON activity_log(user_id)",
+        "CREATE INDEX IF NOT EXISTS idx_activity_log_created_at ON activity_log(created_at)",
+        
+        # Item Types
+        "CREATE INDEX IF NOT EXISTS idx_item_types_name ON item_types(name)",
+        "CREATE INDEX IF NOT EXISTS idx_item_types_is_active ON item_types(is_active)",
+    ]
+    
+    for index_sql in indexes:
+        try:
+            cursor.execute(index_sql)
+        except Exception:
+            pass  # Index may already exist
 
 def _run_migrations(cursor):
     """Add columns for databases created before newer releases."""
