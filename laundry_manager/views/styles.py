@@ -295,8 +295,15 @@ QTimeEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
     background: #fafcff;
 }}
 
-QLineEdit::placeholder {{
-    color: {TEXT_PLACEHOLDER};
+QLineEdit::placeholder, QTextEdit::placeholder {{
+    color: #64748b;
+}}
+
+QLineEdit:disabled, QTextEdit:disabled, QDateEdit:disabled,
+QDateTimeEdit:disabled, QTimeEdit:disabled, QSpinBox:disabled,
+QDoubleSpinBox:disabled {{
+    background: #eef2f7;
+    color: #475569;
 }}
 
 QComboBox {{

@@ -151,9 +151,18 @@ def _run_migrations(cursor):
     """Add columns for databases created before newer releases."""
     cursor.execute("PRAGMA table_info(orders)")
     order_cols = {row[1] for row in cursor.fetchall()}
+    for column, definition in [('subtotal_amount', 'REAL DEFAULT 0'), ('tax_rate', 'REAL DEFAULT 0'), ('tax_amount', 'REAL DEFAULT 0')]:
+        if column not in order_cols:
+            cursor.execute(f"ALTER TABLE orders ADD COLUMN {column} {definition}")
     if 'expected_delivery' not in order_cols:
         cursor.execute("ALTER TABLE orders ADD COLUMN expected_delivery DATETIME")
     
+    cursor.execute("PRAGMA table_info(invoices)")
+    invoice_cols = {row[1] for row in cursor.fetchall()}
+    for column, definition in [('subtotal_amount', 'REAL DEFAULT 0'), ('tax_rate', 'REAL DEFAULT 0'), ('tax_amount', 'REAL DEFAULT 0')]:
+        if column not in invoice_cols:
+            cursor.execute(f"ALTER TABLE invoices ADD COLUMN {column} {definition}")
+
     cursor.execute("PRAGMA table_info(item_types)")
     item_cols = {row[1] for row in cursor.fetchall()}
     if 'image_path' not in item_cols:

@@ -1,9 +1,9 @@
 import os
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QComboBox, QDialog, QFrame, QMessageBox,
+    QComboBox, QCompleter, QDialog, QFrame, QMessageBox,
     QTableWidget, QTableWidgetItem, QHeaderView,
-    QDoubleSpinBox, QDateTimeEdit, QScrollArea, QGridLayout,
+    QDoubleSpinBox, QSpinBox, QDateTimeEdit, QScrollArea, QGridLayout,
     QFormLayout, QSizePolicy, QSplitter,
 )
 from PyQt6.QtCore import Qt, QDateTime, pyqtSignal
@@ -69,7 +69,7 @@ class ProductCard(QFrame):
         name_lbl.setWordWrap(True)
         layout.addWidget(name_lbl)
 
-        price_lbl = QLabel(f"RM {self.item_type['wash_price']:.2f}")
+        price_lbl = QLabel(f"SAR {self.item_type['wash_price']:.2f}")
         price_lbl.setStyleSheet(f"color: {PRIMARY}; font-weight: bold; font-size: 12px;")
         price_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(price_lbl)
@@ -195,9 +195,18 @@ class NewOrderDialog(QDialog):
         lbl_cust.setStyleSheet(f"font-size:11px; font-weight:600; color:{TEXT_LABEL};")
         rv.addWidget(lbl_cust)
         self.cmb_customer = QComboBox()
+        self.cmb_customer.setEditable(True)
+        self.cmb_customer.lineEdit().setPlaceholderText(tr("select_customer"))
         self.cmb_customer.addItem(tr("select_customer"), None)
+        customer_labels = []
         for c in CustomerModel.get_all():
-            self.cmb_customer.addItem(c['name'], c['id'])
+            label = f"{c['name']} — #{c['id']}" + (f"  {c['phone']}" if c.get('phone') else "")
+            self.cmb_customer.addItem(label, c['id'])
+            customer_labels.append(label)
+        completer = QCompleter(customer_labels, self.cmb_customer)
+        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self.cmb_customer.setCompleter(completer)
         rv.addWidget(self.cmb_customer)
 
         # ── Company
@@ -264,10 +273,17 @@ class NewOrderDialog(QDialog):
         lbl_pay = QLabel(tr("payment_method"))
         lbl_pay.setStyleSheet(f"font-size:11px; font-weight:600; color:{TEXT_LABEL};")
         rv.addWidget(lbl_pay)
-        self.cmb_payment = QComboBox()
+        self.payment_buttons = {}
+        payment_row = QHBoxLayout()
         for p in ['on_delivery', 'at_order', 'deferred']:
-            self.cmb_payment.addItem(tr(p), p)
-        rv.addWidget(self.cmb_payment)
+            button = QPushButton(tr(p))
+            button.setCheckable(True)
+            button.setMinimumHeight(36)
+            button.clicked.connect(lambda checked, key=p: self._select_payment(key))
+            self.payment_buttons[p] = button
+            payment_row.addWidget(button)
+        rv.addLayout(payment_row)
+        self._select_payment('on_delivery')
 
         # ── Expected pickup
         lbl_dt = QLabel(tr("expected_pickup"))
@@ -282,14 +298,14 @@ class NewOrderDialog(QDialog):
         lbl_disc.setStyleSheet(f"font-size:11px; font-weight:600; color:{TEXT_LABEL};")
         rv.addWidget(lbl_disc)
         self.inp_discount = QDoubleSpinBox()
-        self.inp_discount.setPrefix("RM ")
+        self.inp_discount.setPrefix("SAR ")
         self.inp_discount.valueChanged.connect(self._refresh_table)
         rv.addWidget(self.inp_discount)
 
         rv.addSpacing(6)
 
         # ── Total
-        self.lbl_total = QLabel(f"{tr('total')}: RM 0.00")
+        self.lbl_total = QLabel(f"{tr('total')}: SAR 0.00")
         self.lbl_total.setStyleSheet(
             f"font-size:15px; font-weight:bold; color:{PRIMARY}; padding:4px 0;")
         rv.addWidget(self.lbl_total)
@@ -383,17 +399,34 @@ class NewOrderDialog(QDialog):
 
             self.tbl_items.setItem(r, 0, cell(
                 f"{it['item_name']} ({tr(it['service_type'])})"))
-            self.tbl_items.setItem(r, 1, cell(str(it['quantity']), center=True))
+            qty_wrap = QWidget()
+            qty_layout = QHBoxLayout(qty_wrap)
+            qty_layout.setContentsMargins(0, 0, 0, 0)
+            qty_layout.setSpacing(2)
+            minus_btn = QPushButton("−")
+            plus_btn = QPushButton("+")
+            qty_lbl = QLabel(str(it['quantity']))
+            qty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            qty_lbl.setMinimumWidth(22)
+            for qty_btn in (minus_btn, plus_btn):
+                qty_btn.setFixedSize(22, 22)
+                qty_btn.setStyleSheet("QPushButton{border:1px solid #cbd5e1;border-radius:5px;background:#fff;color:#0f172a;font-weight:bold;} QPushButton:hover{background:#dbeafe;}")
+            minus_btn.clicked.connect(lambda _, idx=r: self._change_quantity(idx, -1))
+            plus_btn.clicked.connect(lambda _, idx=r: self._change_quantity(idx, 1))
+            qty_layout.addWidget(minus_btn)
+            qty_layout.addWidget(qty_lbl)
+            qty_layout.addWidget(plus_btn)
+            self.tbl_items.setCellWidget(r, 1, qty_wrap)
             price_input = QDoubleSpinBox()
             price_input.setRange(0.01, 999999.99)
             price_input.setDecimals(2)
-            price_input.setPrefix("RM ")
+            price_input.setPrefix("SAR ")
             price_input.setValue(float(it['unit_price']))
             price_input.setToolTip(tr("temporary_price_hint"))
             price_input.valueChanged.connect(
                 lambda value, idx=r: self._set_temporary_price(idx, value))
             self.tbl_items.setCellWidget(r, 2, price_input)
-            self.tbl_items.setItem(r, 3, cell(f"RM {it['total_price']:.2f}"))
+            self.tbl_items.setItem(r, 3, cell(f"SAR {it['total_price']:.2f}"))
 
             del_btn = QPushButton("✕")
             del_btn.setFixedSize(26, 26)
@@ -407,12 +440,31 @@ class NewOrderDialog(QDialog):
             total += it['total_price']
 
         disc = self.inp_discount.value()
+        subtotal = max(0.0, total - disc)
+        vat = round(subtotal * 15.0 / 100.0, 2)
+        grand_total = subtotal + vat
         self.lbl_total.setText(
-            f"{tr('total')}: RM {max(0.0, total - disc):.2f}")
+            f"{tr('total')}: SAR {grand_total:.2f}  |  VAT 15%: SAR {vat:.2f}")
 
     def _remove(self, idx):
         self.selected_items.pop(idx)
         self._refresh_table()
+
+    def _change_quantity(self, idx, delta):
+        if 0 <= idx < len(self.selected_items):
+            item = self.selected_items[idx]
+            item['quantity'] = max(1, int(item['quantity']) + delta)
+            item['total_price'] = item['quantity'] * item['unit_price']
+            self._refresh_table()
+
+    def _select_payment(self, key):
+        self.selected_payment = key
+        for name, button in self.payment_buttons.items():
+            button.setChecked(name == key)
+            button.setStyleSheet(
+                "QPushButton{border:1px solid #2563eb;border-radius:7px;padding:5px;background:#2563eb;color:white;font-weight:bold;}" if name == key else
+                "QPushButton{border:1px solid #cbd5e1;border-radius:7px;padding:5px;background:#ffffff;color:#0f172a;} QPushButton:hover{background:#dbeafe;}"
+            )
 
     def _set_temporary_price(self, idx, price):
         """Apply a price only to this in-progress order; the catalog stays unchanged."""
@@ -447,12 +499,13 @@ class NewOrderDialog(QDialog):
                 customer_id=cust_id,
                 company_id=comp_id,
                 items=self.selected_items,
-                payment_method=self.cmb_payment.currentData(),
+                payment_method=self.selected_payment,
                 discount=self.inp_discount.value(),
                 notes="",
                 created_by=self.user['id'],
                 expected_delivery=self.dt_delivery.dateTime().toString(
                     "yyyy-MM-dd HH:mm:ss"),
+                tax_rate=15.0,
             )
         except Exception as e:
             QMessageBox.critical(self, tr("error"), tr("order_save_failed", error=e))
@@ -567,9 +620,9 @@ class OrdersView(QWidget):
             ps = o.get('payment_status', '')
             self.table.setItem(r, 4, colored_item(tr(f"status_{ps}"), ps))
             self.table.setItem(r, 5, table_item(
-                f"RM {o.get('total_amount', 0):.2f}"))
+                f"SAR {o.get('total_amount', 0):.2f}"))
             self.table.setItem(r, 6, table_item(
-                f"RM {o.get('paid_amount', 0):.2f}"))
+                f"SAR {o.get('paid_amount', 0):.2f}"))
             self.table.setItem(r, 7, table_item(
                 str(o.get('created_at', ''))[:10]))
 
@@ -596,6 +649,75 @@ class OrdersView(QWidget):
         row = self.table.currentRow()
         if 0 <= row < len(self._all_orders):
             self._open(self._all_orders[row])
+
+
+# ════════════════════════ EDIT ORDER ITEMS ═══════════════════
+class EditOrderItemsDialog(QDialog):
+    def __init__(self, parent, items):
+        super().__init__(parent)
+        self.setWindowTitle(tr("edit_order_items"))
+        self.resize(700, 420)
+        self.items = [dict(item) for item in items]
+        self.rows = []
+        root = QVBoxLayout(self)
+        root.addWidget(dialog_title(tr("edit_order_items")))
+        table = QTableWidget(len(self.items), 4)
+        table.setHorizontalHeaderLabels([tr("items"), tr("service"), tr("qty"), tr("temporary_price")])
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        table.setColumnWidth(2, 80)
+        table.setColumnWidth(3, 120)
+        table.verticalHeader().setVisible(False)
+        for row, item in enumerate(self.items):
+            table.setItem(row, 0, table_item(item.get("item_name", "")))
+            service = QComboBox()
+            for key in ("wash", "iron", "dry_clean"):
+                service.addItem(tr(key), key)
+            service.setCurrentIndex(max(0, service.findData(item.get("service_type", "wash"))))
+            qty = QSpinBox()
+            qty.setRange(1, 9999)
+            qty.setValue(int(item.get("quantity", 1)))
+            price = QDoubleSpinBox()
+            price.setRange(0.01, 999999.99)
+            price.setDecimals(2)
+            price.setPrefix("SAR ")
+            price.setValue(float(item.get("unit_price", 0)))
+            service.currentIndexChanged.connect(lambda _, r=row: self._set_service_price(r))
+            table.setCellWidget(row, 1, service)
+            table.setCellWidget(row, 2, qty)
+            table.setCellWidget(row, 3, price)
+            self.rows.append((service, qty, price))
+        self.table = table
+        root.addWidget(table)
+        buttons = QHBoxLayout()
+        cancel = QPushButton(tr("cancel"))
+        save = QPushButton(tr("save"))
+        cancel.clicked.connect(self.reject)
+        save.clicked.connect(self._save)
+        buttons.addStretch()
+        buttons.addWidget(cancel)
+        buttons.addWidget(save)
+        root.addLayout(buttons)
+
+    def _set_service_price(self, row):
+        service, _, price = self.rows[row]
+        item = self.items[row]
+        item_type = ItemTypeModel.get_by_id(item.get("item_type_id"))
+        if item_type:
+            field = {"wash": "wash_price", "iron": "iron_price", "dry_clean": "dry_clean_price"}.get(service.currentData(), "wash_price")
+            price.setValue(float(item_type.get(field) or 0))
+
+    def _save(self):
+        result = []
+        for item, (service, qty, price) in zip(self.items, self.rows):
+            value = dict(item)
+            value["service_type"] = service.currentData()
+            value["quantity"] = qty.value()
+            value["unit_price"] = price.value()
+            value["total_price"] = qty.value() * price.value()
+            result.append(value)
+        self.items = result
+        self.accept()
 
 
 # ════════════════════════ ORDER DETAIL DIALOG ════════════════
@@ -635,7 +757,7 @@ class OrderDetailDialog(QDialog):
         info.addRow(field_label(tr("col_status") + ":"),
                     status_chip(tr(f"status_{self.order['status']}"), PRIMARY))
         info.addRow(field_label(tr("total") + ":"),
-                    value_label(f"RM {self.order.get('total_amount', 0):.2f}"))
+                    value_label(f"SAR {self.order.get('total_amount', 0):.2f}"))
         lv.addLayout(info)
 
         lv.addWidget(field_label(tr("items") + ":"))
@@ -652,8 +774,12 @@ class OrderDetailDialog(QDialog):
             tbl.setItem(r, 1, table_item(
                 str(it.get('quantity', 0)), align_center=True))
             tbl.setItem(r, 2, table_item(
-                f"RM {it.get('total_price', 0):.2f}"))
+                f"SAR {it.get('total_price', 0):.2f}"))
         lv.addWidget(tbl)
+
+        btn_edit_items = make_btn(tr("edit_order_items"), "btn_secondary")
+        btn_edit_items.clicked.connect(self._edit_items)
+        lv.addWidget(btn_edit_items)
 
         lv.addWidget(h_separator())
 
@@ -707,6 +833,22 @@ class OrderDetailDialog(QDialog):
         rv.addWidget(btn_inv)
 
         root.addWidget(right)
+
+    def _edit_items(self):
+        items = OrderModel.get_items(self.order['id'])
+        dialog = EditOrderItemsDialog(self, items)
+        if dialog.exec():
+            try:
+                OrderModel.update_items(self.order['id'], dialog.items,
+                                        discount=self.order.get('discount', 0),
+                                        tax_rate=self.order.get('tax_rate', 15) or 15)
+                ActivityModel.log(self.user['id'], self.user['username'],
+                                  'UPDATE', 'order', self.order['id'], 'Updated order items')
+                self.order = OrderModel.get_by_id(self.order['id'])
+                QMessageBox.information(self, tr('success'), tr('order_updated'))
+                self.accept()
+            except Exception as e:
+                QMessageBox.critical(self, tr('error'), str(e))
 
     def _update_status(self, status):
         OrderModel.update_status(self.order['id'], status)

@@ -121,7 +121,7 @@ class InvoiceDetailDialog(QDialog):
         # Totals
         totals = QFormLayout()
         totals.setSpacing(8)
-        total_lbl = value_label(f"RM {self.invoice.get('total_amount', 0):.2f}")
+        total_lbl = value_label(f"SAR {self.invoice.get('total_amount', 0):.2f}")
         total_lbl.setStyleSheet("font-size: 16px; font-weight: bold; color: black;")
         totals.addRow(field_label(tr("total").upper() + ":"), total_lbl)
         paper_layout.addLayout(totals)
@@ -174,7 +174,12 @@ class InvoiceDetailDialog(QDialog):
         try:
             path = self._get_pdf_path()
             if path and os.path.exists(path):
-                os.startfile(path) if os.name == 'nt' else subprocess.run(['xdg-open', path])
+                if os.name == 'nt':
+                    # Uses the PDF application's registered "print" verb,
+                    # sending the document to the Windows default printer.
+                    os.startfile(path, "print")
+                else:
+                    subprocess.run(['lp', path], check=False)
             else:
                 QMessageBox.warning(self, tr("error"), tr("generated_file_not_found"))
         except Exception as e:
@@ -259,8 +264,8 @@ class InvoicesView(QWidget):
             name = inv.get('customer_name') or inv.get('company_name') or '—'
             self.table.setItem(r, 1, table_item(name))
             self.table.setItem(r, 2, table_item(inv.get('order_number', '') or '—'))
-            self.table.setItem(r, 3, table_item(f"RM {inv.get('total_amount', 0):.2f}"))
-            self.table.setItem(r, 4, table_item(f"RM {inv.get('paid_amount', 0):.2f}"))
+            self.table.setItem(r, 3, table_item(f"SAR {inv.get('total_amount', 0):.2f}"))
+            self.table.setItem(r, 4, table_item(f"SAR {inv.get('paid_amount', 0):.2f}"))
             status = inv.get('status', 'unpaid')
             self.table.setItem(r, 5, colored_item(tr(f"status_{status}"), status))
             self.table.setItem(r, 6, table_item(str(inv.get('issued_date', ''))[:10]))

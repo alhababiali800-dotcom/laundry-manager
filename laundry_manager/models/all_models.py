@@ -135,7 +135,7 @@ class CompanyModel:
         )
 
     @staticmethod
-    def create(name, contact_person, phone, email, address, notes):
+    def create(name, contact_person, phone, email, address="", notes=""):
         return Database.lastrowid(
             "INSERT INTO companies (name,contact_person,phone,email,address,notes) VALUES (?,?,?,?,?,?)",
             (name, contact_person, phone, email, address, notes)
@@ -258,7 +258,7 @@ class OrderModel:
 
     @staticmethod
     def create(customer_id, company_id, items, payment_method, discount, notes, created_by,
-               expected_delivery=None):
+               expected_delivery=None, tax_rate=0.0):
         if customer_id and company_id:
             raise ValueError("Select either a customer or a company, not both.")
         if not customer_id and not company_id:
@@ -274,16 +274,20 @@ class OrderModel:
         for item in items:
             if int(item['quantity']) <= 0 or float(item['unit_price']) < 0 or float(item['total_price']) < 0:
                 raise ValueError("Order item quantities and prices must be valid.")
-        total_after = total - discount
+        subtotal = total - discount
+        tax_rate = max(0.0, float(tax_rate))
+        tax_amount = round(subtotal * tax_rate / 100.0, 2)
+        total_after = round(subtotal + tax_amount, 2)
         with Database.transaction():
             order_number = _gen_order_number()
             oid = Database.lastrowid(
                 """INSERT INTO orders
                    (order_number,customer_id,company_id,total_amount,discount,payment_method,notes,
-                    created_by,expected_delivery)
-                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                    created_by,expected_delivery,subtotal_amount,tax_rate,tax_amount)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (order_number, customer_id or None, company_id or None,
-                 total_after, discount, payment_method, notes, created_by, expected_delivery)
+                 total_after, discount, payment_method, notes, created_by, expected_delivery,
+                 subtotal, tax_rate, tax_amount)
             )
             for it in items:
                 Database.execute(
@@ -294,11 +298,49 @@ class OrderModel:
                 )
             inv_num = f"INV-{order_number[4:]}"
             Database.execute(
-                """INSERT INTO invoices (invoice_number,customer_id,company_id,order_id,total_amount,status)
-                   VALUES (?,?,?,?,?,?)""",
-                (inv_num, customer_id or None, company_id or None, oid, total_after, 'unpaid')
+                """INSERT INTO invoices
+                   (invoice_number,customer_id,company_id,order_id,subtotal_amount,tax_rate,tax_amount,total_amount,status)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                (inv_num, customer_id or None, company_id or None, oid,
+                 subtotal, tax_rate, tax_amount, total_after, 'unpaid')
             )
         return oid, order_number
+
+    @staticmethod
+    def update_items(oid, items, discount=0.0, tax_rate=15.0):
+        if not items:
+            raise ValueError("An order must include at least one item.")
+        order = OrderModel.get_by_id(oid)
+        if not order:
+            raise ValueError("Order not found.")
+        for item in items:
+            if int(item['quantity']) <= 0 or float(item['unit_price']) < 0:
+                raise ValueError("Order item quantities and prices must be valid.")
+        subtotal_items = sum(float(item['quantity']) * float(item['unit_price']) for item in items)
+        discount = float(discount)
+        if discount < 0 or discount > subtotal_items:
+            raise ValueError("Discount must be between zero and the order subtotal.")
+        subtotal = subtotal_items - discount
+        tax_rate = max(0.0, float(tax_rate))
+        tax_amount = round(subtotal * tax_rate / 100.0, 2)
+        total = round(subtotal + tax_amount, 2)
+        if total < float(order.get('paid_amount') or 0):
+            raise ValueError("The new total cannot be lower than the amount already paid.")
+        with Database.transaction():
+            Database.execute("DELETE FROM order_items WHERE order_id=?", (oid,))
+            for item in items:
+                Database.execute(
+                    "INSERT INTO order_items (order_id,item_type_id,item_name,service_type,quantity,unit_price,total_price) VALUES (?,?,?,?,?,?,?)",
+                    (oid, item.get('item_type_id'), item['item_name'], item['service_type'],
+                     int(item['quantity']), float(item['unit_price']),
+                     round(int(item['quantity']) * float(item['unit_price']), 2)))
+            Database.execute(
+                "UPDATE orders SET subtotal_amount=?, tax_rate=?, tax_amount=?, total_amount=?, discount=? WHERE id=?",
+                (subtotal, tax_rate, tax_amount, total, discount, oid))
+            Database.execute(
+                "UPDATE invoices SET subtotal_amount=?, tax_rate=?, tax_amount=?, total_amount=?, status=? WHERE order_id=?",
+                (subtotal, tax_rate, tax_amount, total,
+                 'paid' if float(order.get('paid_amount') or 0) >= total else ('partial' if float(order.get('paid_amount') or 0) > 0 else 'unpaid'), oid))
 
     @staticmethod
     def update_status(oid, status):

@@ -5,6 +5,36 @@ Redesigned for cashier-style receipts.
 import os
 import tempfile
 from datetime import datetime
+from html import escape
+from pathlib import Path
+
+
+def _pdf_text(value: object) -> str:
+    """Shape Arabic text when optional shaping packages are available."""
+    text = escape(str(value or ""))
+    if any("\u0600" <= ch <= "\u06ff" for ch in text):
+        try:
+            import arabic_reshaper
+            from bidi.algorithm import get_display
+            return get_display(arabic_reshaper.reshape(text))
+        except ImportError:
+            pass
+    return text
+
+
+def _register_pdf_fonts():
+    try:
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        candidates = [Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "arial.ttf",
+                      Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts" / "segoeui.ttf"]
+        for path in candidates:
+            if path.is_file():
+                pdfmetrics.registerFont(TTFont("AppArabic", str(path)))
+                return "AppArabic", "AppArabic"
+    except Exception:
+        pass
+    return "Helvetica", "Helvetica-Bold"
 from utils.branding import BUSINESS_NAME, BUSINESS_TAGLINE, get_logo_path
 from utils.qr_code import generate_invoice_qr
 
@@ -20,6 +50,7 @@ def generate_invoice_pdf(invoice: dict, order_items: list = None,
         )
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.enums import TA_RIGHT, TA_CENTER, TA_LEFT
+        from reportlab.graphics.barcode import createBarcodeDrawing
     except ImportError:
         return _fallback_txt_invoice(invoice, order_items, order)
 
@@ -48,30 +79,31 @@ def generate_invoice_pdf(invoice: dict, order_items: list = None,
     GRAY = colors.HexColor('#333333')
 
     styles = getSampleStyleSheet()
+    font_regular, font_bold = _register_pdf_fonts()
     
     header_style = ParagraphStyle(
         'header', fontSize=12, textColor=DARK,
-        fontName='Helvetica-Bold', alignment=TA_CENTER, leading=14,
+        fontName=font_bold, alignment=TA_CENTER, leading=14,
     )
     tagline_style = ParagraphStyle(
         'tagline', fontSize=8, textColor=GRAY,
-        fontName='Helvetica', alignment=TA_CENTER, leading=10,
+        fontName=font_regular, alignment=TA_CENTER, leading=10,
     )
     normal_style = ParagraphStyle(
         'normal', fontSize=9, textColor=DARK,
-        fontName='Helvetica', leading=11,
+        fontName=font_regular, leading=11,
     )
     bold_style = ParagraphStyle(
         'bold', fontSize=9, textColor=DARK,
-        fontName='Helvetica-Bold', leading=11,
+        fontName=font_bold, leading=11,
     )
     center_style = ParagraphStyle(
         'center', fontSize=9, textColor=DARK,
-        fontName='Helvetica', alignment=TA_CENTER, leading=11,
+        fontName=font_regular, alignment=TA_CENTER, leading=11,
     )
     right_style = ParagraphStyle(
         'right', fontSize=9, textColor=DARK,
-        fontName='Helvetica', alignment=TA_RIGHT, leading=11,
+        fontName=font_regular, alignment=TA_RIGHT, leading=11,
     )
 
     elements = []
@@ -105,11 +137,11 @@ def generate_invoice_pdf(invoice: dict, order_items: list = None,
     issued = str(invoice.get('issued_date', datetime.now().strftime('%Y-%m-%d')))[:10]
     customer = invoice.get('customer_name') or invoice.get('company_name') or 'Guest'
     
-    elements.append(Paragraph(f"<b>RECEIPT:</b> {inv_num}", normal_style))
-    elements.append(Paragraph(f"<b>DATE:</b> {issued}", normal_style))
-    elements.append(Paragraph(f"<b>CUST:</b> {customer}", normal_style))
+    elements.append(Paragraph(_pdf_text(f"<b>RECEIPT:</b> {inv_num}"), normal_style))
+    elements.append(Paragraph(_pdf_text(f"<b>DATE:</b> {issued}"), normal_style))
+    elements.append(Paragraph(_pdf_text(f"<b>CUST:</b> {customer}"), normal_style))
     if order and order.get('order_number'):
-        elements.append(Paragraph(f"<b>ORDER:</b> {order['order_number']}", normal_style))
+        elements.append(Paragraph(_pdf_text(f"<b>ORDER:</b> {order['order_number']}"), normal_style))
     
     elements.append(Spacer(1, 2 * mm))
     elements.append(HRFlowable(width='100%', thickness=0.5, color=DARK, dash=(1, 1)))
@@ -128,7 +160,7 @@ def generate_invoice_pdf(invoice: dict, order_items: list = None,
             svc = it.get('service_type', '').upper()
             tbl_data.append([
                 Paragraph(str(it.get('quantity', 1)), center_style),
-                Paragraph(f"{name} ({svc})", normal_style),
+                Paragraph(_pdf_text(f"{name} ({svc})"), normal_style),
                 Paragraph(f"{it.get('total_price', 0):.2f}", right_style)
             ])
         
@@ -146,14 +178,19 @@ def generate_invoice_pdf(invoice: dict, order_items: list = None,
     elements.append(Spacer(1, 2 * mm))
 
     # ── Totals ──
-    total = invoice.get('total_amount', 0)
-    paid = invoice.get('paid_amount', 0)
+    total = float(invoice.get('total_amount') or 0)
+    paid = float(invoice.get('paid_amount') or 0)
     balance = total - paid
+    subtotal = float(invoice.get('subtotal_amount') or total)
+    tax_amount = float(invoice.get('tax_amount') or 0)
+    tax_rate = float(invoice.get('tax_rate') or 0)
 
     totals_data = [
-        [Paragraph("<b>TOTAL RM</b>", normal_style), Paragraph(f"<b>{total:.2f}</b>", right_style)],
-        [Paragraph("PAID RM", normal_style), Paragraph(f"{paid:.2f}", right_style)],
-        [Paragraph("BALANCE RM", normal_style), Paragraph(f"{balance:.2f}", right_style)],
+        [Paragraph("SUBTOTAL SAR", normal_style), Paragraph(f"{subtotal:.2f}", right_style)],
+        [Paragraph(f"VAT {tax_rate:.2f}%", normal_style), Paragraph(f"{tax_amount:.2f}", right_style)],
+        [Paragraph("<b>TOTAL SAR</b>", normal_style), Paragraph(f"<b>{total:.2f}</b>", right_style)],
+        [Paragraph("PAID SAR", normal_style), Paragraph(f"{paid:.2f}", right_style)],
+        [Paragraph("BALANCE SAR", normal_style), Paragraph(f"{balance:.2f}", right_style)],
     ]
     totals_tbl = Table(totals_data, colWidths=[40 * mm, 30 * mm])
     totals_tbl.setStyle(TableStyle([
@@ -162,6 +199,13 @@ def generate_invoice_pdf(invoice: dict, order_items: list = None,
         ('RIGHTPADDING', (0, 0), (-1, -1), 0),
     ]))
     elements.append(totals_tbl)
+    try:
+        barcode = createBarcodeDrawing('Code128', value=str(inv_num), barHeight=8 * mm, barWidth=0.35)
+        barcode.hAlign = 'CENTER'
+        elements.append(Spacer(1, 3 * mm))
+        elements.append(barcode)
+    except Exception:
+        pass
     
     elements.append(Spacer(1, 6 * mm))
     elements.append(Paragraph("THANK YOU!", center_style))
