@@ -4,9 +4,9 @@ from PyQt6.QtWidgets import (
     QComboBox, QCompleter, QDialog, QFrame, QMessageBox,
     QTableWidget, QTableWidgetItem, QHeaderView,
     QDoubleSpinBox, QSpinBox, QDateTimeEdit, QScrollArea, QGridLayout,
-    QFormLayout, QSizePolicy, QSplitter,
+    QFormLayout, QSizePolicy, QSplitter, QListWidget, QToolButton, QLineEdit,
 )
-from PyQt6.QtCore import Qt, QDateTime, pyqtSignal
+from PyQt6.QtCore import Qt, QDateTime, pyqtSignal, QTimer
 from PyQt6.QtGui import QPixmap, QColor
 from database.connection import Database
 from models.all_models import OrderModel, CustomerModel, CompanyModel, ItemTypeModel, ActivityModel
@@ -77,6 +77,158 @@ class ProductCard(QFrame):
 
     def mousePressEvent(self, event):
         self.clicked.emit(self.item_type)
+
+
+# ═══════════════════════ CUSTOMER SEARCH WIDGET ═════════════════
+class CustomerSearchWidget(QWidget):
+    """Search-as-you-type widget with debounced queries and quick-create button.
+    Exposes currentData() to match QComboBox usage elsewhere.
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.parent_ref = parent
+        self.selected = None  # dict of selected customer
+        self._debounce = QTimer(self)
+        self._debounce.setSingleShot(True)
+        self._debounce.setInterval(300)
+        self._debounce.timeout.connect(self._perform_search)
+        self._build()
+
+    def _build(self):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+
+        self.line = QLineEdit()
+        self.line.setPlaceholderText(tr("select_customer"))
+        self.line.setObjectName("search_input_customer")
+        self.line.setMinimumHeight(36)
+        self.line.textChanged.connect(self._on_text_changed)
+        layout.addWidget(self.line, 1)
+
+        self.btn_add = QToolButton()
+        self.btn_add.setText("+")
+        self.btn_add.setToolTip(tr("add_customer_quick"))
+        self.btn_add.setFixedSize(36, 36)
+        self.btn_add.clicked.connect(self._open_quick_create)
+        layout.addWidget(self.btn_add)
+
+        # Popup results
+        self.popup = QListWidget()
+        self.popup.setWindowFlags(Qt.WindowType.Popup)
+        self.popup.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.popup.setMouseTracking(True)
+        self.popup.itemClicked.connect(self._on_item_clicked)
+
+    def _on_text_changed(self, text):
+        self.selected = None
+        # schedule search
+        if text.strip():
+            self._debounce.start()
+            self._show_popup_placeholder()
+        else:
+            self._debounce.stop()
+            self._hide_popup()
+
+    def _perform_search(self):
+        q = self.line.text().strip()
+        if not q:
+            self._hide_popup()
+            return
+        try:
+            rows = CustomerModel.search(q)[:20]
+        except Exception:
+            rows = []
+        self.popup.clear()
+        for r in rows:
+            label = f"{r.get('name','')} — CUS-{int(r.get('id',0)):06d}"
+            if r.get('phone'):
+                label += f" — {r.get('phone')}"
+            item = self.popup.addItem(label)
+            # store id on QListWidgetItem via setData
+            li = self.popup.item(self.popup.count() - 1)
+            li.setData(Qt.ItemDataRole.UserRole, r)
+        if self.popup.count() > 0:
+            self._show_popup()
+        else:
+            self._hide_popup()
+
+    def _show_popup_placeholder(self):
+        # position and show popup with 'Searching...'
+        self.popup.clear()
+        self.popup.addItem(tr("searching"))
+        self._show_popup()
+
+    def _show_popup(self):
+        if self.popup.count() == 0:
+            return
+        # place popup below the line edit
+        pos = self.line.mapToGlobal(self.line.rect().bottomLeft())
+        self.popup.move(pos)
+        self.popup.setFixedWidth(self.line.width() + self.btn_add.width() + 6)
+        self.popup.show()
+
+    def _hide_popup(self):
+        self.popup.hide()
+
+    def _on_item_clicked(self, item):
+        data = item.data(Qt.ItemDataRole.UserRole)
+        if data:
+            self._select_customer(data)
+
+    def _select_customer(self, cust):
+        self.selected = cust
+        display = f"{cust.get('name','')} — CUS-{int(cust.get('id',0)):06d}"
+        if cust.get('phone'):
+            display += f" — {cust.get('phone')}"
+        self.line.setText(display)
+        self._hide_popup()
+        # notify parent
+        if hasattr(self.parent_ref, '_on_customer_selected'):
+            self.parent_ref._on_customer_selected(cust)
+
+    def _open_quick_create(self):
+        # minimal quick create dialog
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("quick_create_customer"))
+        dlg.setModal(True)
+        form = QFormLayout(dlg)
+        inp_name = QLineEdit()
+        inp_phone = QLineEdit()
+        form.addRow(tr("name"), inp_name)
+        form.addRow(tr("phone"), inp_phone)
+        btns = QHBoxLayout()
+        cancel = QPushButton(tr("cancel"))
+        save = QPushButton(tr("create"))
+        btns.addStretch()
+        btns.addWidget(cancel)
+        btns.addWidget(save)
+        form.addRow(btns)
+        cancel.clicked.connect(dlg.reject)
+        def _do_create():
+            name = inp_name.text().strip()
+            phone = inp_phone.text().strip()
+            if not name:
+                QMessageBox.warning(self, tr('error'), tr('customer_name_required'))
+                return
+            cid = CustomerModel.create(name, phone, '', '', 'individual', None, '')
+            cust = CustomerModel.get_by_id(cid)
+            self._select_customer(cust)
+            dlg.accept()
+        save.clicked.connect(_do_create)
+        dlg.exec()
+
+    def currentData(self):
+        return self.selected.get('id') if self.selected else None
+
+    def set_selected_by_id(self, cid):
+        if not cid:
+            self.selected = None
+            self.line.clear()
+            return
+        cust = CustomerModel.get_by_id(cid)
+        if cust:
+            self._select_customer(cust)
 
 
 # ════════════════════════ NEW ORDER DIALOG ════════════════════
@@ -194,20 +346,10 @@ class NewOrderDialog(QDialog):
         lbl_cust = QLabel(tr("customer_individual"))
         lbl_cust.setStyleSheet(f"font-size:11px; font-weight:600; color:{TEXT_LABEL};")
         rv.addWidget(lbl_cust)
-        self.cmb_customer = QComboBox()
-        self.cmb_customer.setEditable(True)
-        self.cmb_customer.lineEdit().setPlaceholderText(tr("select_customer"))
-        self.cmb_customer.addItem(tr("select_customer"), None)
-        customer_labels = []
-        for c in CustomerModel.get_all():
-            label = f"{c['name']} — #{c['id']}" + (f"  {c['phone']}" if c.get('phone') else "")
-            self.cmb_customer.addItem(label, c['id'])
-            customer_labels.append(label)
-        completer = QCompleter(customer_labels, self.cmb_customer)
-        completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        completer.setFilterMode(Qt.MatchFlag.MatchContains)
-        self.cmb_customer.setCompleter(completer)
-        rv.addWidget(self.cmb_customer)
+
+        # Replace previous QComboBox with search widget
+        self.customer_search = CustomerSearchWidget(self)
+        rv.addWidget(self.customer_search)
 
         # ── Company
         lbl_comp = QLabel(tr("or_company"))
@@ -218,10 +360,9 @@ class NewOrderDialog(QDialog):
         for c in CompanyModel.get_all():
             self.cmb_company.addItem(c['name'], c['id'])
         rv.addWidget(self.cmb_company)
-        self.cmb_customer.currentIndexChanged.connect(
-            lambda: self._sync_party_selection(self.cmb_customer, self.cmb_company))
-        self.cmb_company.currentIndexChanged.connect(
-            lambda: self._sync_party_selection(self.cmb_company, self.cmb_customer))
+
+        # Sync behavior
+        self.cmb_company.currentIndexChanged.connect(self._on_company_changed)
 
         # ── Items table
         lbl_items = QLabel(tr("items"))
@@ -476,7 +617,12 @@ class NewOrderDialog(QDialog):
 
     def _sync_party_selection(self, selected, other):
         """An order belongs either to an individual customer or to a company."""
-        if selected.currentData() is not None:
+        # Backwards compatible: support both QComboBox and CustomerSearchWidget-like
+        try:
+            cust_id = selected.currentData()
+        except Exception:
+            cust_id = None
+        if cust_id is not None:
             other.blockSignals(True)
             other.setCurrentIndex(0)
             other.blockSignals(False)
@@ -484,12 +630,29 @@ class NewOrderDialog(QDialog):
         else:
             other.setEnabled(True)
 
+    def _on_company_changed(self):
+        # when a company is selected, clear customer selection and disable the search
+        cid = self.cmb_company.currentData()
+        if cid:
+            self.customer_search.set_selected_by_id(None)
+            self.customer_search.line.setEnabled(False)
+        else:
+            self.customer_search.line.setEnabled(True)
+
+    def _on_customer_selected(self, cust):
+        # called when customer selected from search widget
+        # disable company selection
+        self.cmb_company.blockSignals(True)
+        self.cmb_company.setCurrentIndex(0)
+        self.cmb_company.blockSignals(False)
+        self.cmb_company.setEnabled(False)
+
     def _save(self):
         if not self.selected_items:
             QMessageBox.warning(self, tr("error"), tr("order_items_required"))
             return
-        cust_id = self.cmb_customer.currentData()
-        comp_id = self.cmb_company.currentData()
+        cust_id = self.customer_search.currentData() if hasattr(self, 'customer_search') else None
+        comp_id = self.cmb_company.currentData() if hasattr(self, 'cmb_company') else None
         if not cust_id and not comp_id:
             QMessageBox.warning(self, tr("error"), tr("order_customer_required"))
             return
@@ -756,115 +919,4 @@ class OrderDetailDialog(QDialog):
         info.addRow(field_label(tr("col_customer") + ":"), value_label(name))
         info.addRow(field_label(tr("col_status") + ":"),
                     status_chip(tr(f"status_{self.order['status']}"), PRIMARY))
-        info.addRow(field_label(tr("total") + ":"),
-                    value_label(f"SAR {self.order.get('total_amount', 0):.2f}"))
-        lv.addLayout(info)
-
-        lv.addWidget(field_label(tr("items") + ":"))
-        tbl = QTableWidget()
-        tbl.setColumnCount(3)
-        tbl.setHorizontalHeaderLabels([tr("items"), tr("qty"), tr("total")])
-        tbl.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
-        tbl.verticalHeader().setVisible(False)
-        tbl.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        items = OrderModel.get_items(self.order['id'])
-        tbl.setRowCount(len(items))
-        for r, it in enumerate(items):
-            tbl.setItem(r, 0, table_item(it.get('item_name', '')))
-            tbl.setItem(r, 1, table_item(
-                str(it.get('quantity', 0)), align_center=True))
-            tbl.setItem(r, 2, table_item(
-                f"SAR {it.get('total_price', 0):.2f}"))
-        lv.addWidget(tbl)
-
-        btn_edit_items = make_btn(tr("edit_order_items"), "btn_secondary")
-        btn_edit_items.clicked.connect(self._edit_items)
-        lv.addWidget(btn_edit_items)
-
-        lv.addWidget(h_separator())
-
-        # Status change buttons
-        status_row = QHBoxLayout()
-        status_row.setSpacing(8)
-        status_row.addWidget(field_label(tr("col_status") + ":"))
-        for s in ['processing', 'ready', 'delivered', 'cancelled']:
-            if s != self.order['status']:
-                b = make_btn(tr(f"status_{s}"), "btn_secondary")
-                b.setMinimumHeight(34)
-                b.clicked.connect(lambda _, st=s: self._update_status(st))
-                status_row.addWidget(b)
-        status_row.addStretch()
-        lv.addLayout(status_row)
-
-        lv.addStretch()
-        root.addWidget(left, 1)
-
-        # ── Right: invoice preview ────────────────────────────
-        right = QFrame()
-        right.setFixedWidth(300)
-        right.setStyleSheet(
-            f"background:{BG_SUBTLE}; border-left:1.5px solid {BORDER};")
-        rv = QVBoxLayout(right)
-        rv.setContentsMargins(20, 20, 20, 20)
-        rv.setSpacing(10)
-
-        lbl = QLabel(tr("invoice_preview"))
-        lbl.setStyleSheet(
-            f"font-weight:bold; color:{PRIMARY}; font-size:15px;")
-        rv.addWidget(lbl)
-        rv.addWidget(h_separator())
-
-        icon = QLabel("🧾")
-        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon.setStyleSheet("font-size:56px; padding:20px 0;")
-        rv.addWidget(icon)
-
-        msg = QLabel(tr("invoice_ready"))
-        msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        msg.setWordWrap(True)
-        msg.setStyleSheet(f"color:{TEXT_PRIMARY}; font-size:13px;")
-        rv.addWidget(msg)
-
-        rv.addStretch()
-
-        btn_inv = make_btn(tr("view_invoice"), "btn_primary")
-        btn_inv.setMinimumHeight(42)
-        btn_inv.clicked.connect(self._view_invoice)
-        rv.addWidget(btn_inv)
-
-        root.addWidget(right)
-
-    def _edit_items(self):
-        items = OrderModel.get_items(self.order['id'])
-        dialog = EditOrderItemsDialog(self, items)
-        if dialog.exec():
-            try:
-                OrderModel.update_items(self.order['id'], dialog.items,
-                                        discount=self.order.get('discount', 0),
-                                        tax_rate=self.order.get('tax_rate', 15) or 15)
-                ActivityModel.log(self.user['id'], self.user['username'],
-                                  'UPDATE', 'order', self.order['id'], 'Updated order items')
-                self.order = OrderModel.get_by_id(self.order['id'])
-                QMessageBox.information(self, tr('success'), tr('order_updated'))
-                self.accept()
-            except Exception as e:
-                QMessageBox.critical(self, tr('error'), str(e))
-
-    def _update_status(self, status):
-        OrderModel.update_status(self.order['id'], status)
-        ActivityModel.log(self.user['id'], self.user['username'],
-                          'UPDATE', 'order', self.order['id'],
-                          f"Status -> {status}")
-        self.accept()
-
-    def _view_invoice(self):
-        from views.invoices_view import InvoiceDetailDialog
-        from models.all_models import InvoiceModel
-        row = Database.fetchone(
-            "SELECT id FROM invoices WHERE order_id=?", (self.order['id'],))
-        if row:
-            inv = InvoiceModel.get_by_id(row['id'])
-            if inv:
-                InvoiceDetailDialog(self, self.user, inv).exec()
-                return
-        QMessageBox.warning(self, tr("error"), tr("invoice_not_found"))
+        info.addRow(field_label(tr("total") + ":

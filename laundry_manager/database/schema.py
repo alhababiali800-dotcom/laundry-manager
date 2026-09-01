@@ -148,7 +148,7 @@ def initialize_database():
         _seed_default_data()
 
 def _run_migrations(cursor):
-    """Add columns for databases created before newer releases."""
+    """Add columns for databases created before newer releases and create useful indexes."""
     cursor.execute("PRAGMA table_info(orders)")
     order_cols = {row[1] for row in cursor.fetchall()}
     for column, definition in [('subtotal_amount', 'REAL DEFAULT 0'), ('tax_rate', 'REAL DEFAULT 0'), ('tax_amount', 'REAL DEFAULT 0')]:
@@ -172,6 +172,14 @@ def _run_migrations(cursor):
     user_cols = {row[1] for row in cursor.fetchall()}
     if 'must_change_password' not in user_cols:
         cursor.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER DEFAULT 0")
+
+    # Create indexes to speed up customer searches
+    try:
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone)")
+    except Exception:
+        # Index creation is best-effort; ignore failures to keep migrations safe.
+        pass
 
     # Existing installations that still use the documented default password
     # must change it on their next login.

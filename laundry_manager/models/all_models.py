@@ -1,6 +1,7 @@
+import bcrypt
+
 from database.connection import Database
 from datetime import datetime
-import bcrypt
 
 
 # ─────────────────────────── USER ────────────────────────────
@@ -82,11 +83,15 @@ class CustomerModel:
         return Database.fetchone("SELECT * FROM customers WHERE id=?", (cid,))
 
     @staticmethod
-    def search(q):
-        q = f"%{q}%"
+    def search(q, limit=20):
+        """Search customers by name, phone or email. Returns up to `limit` rows.
+        Uses parameterized queries and LIKE patterns. If q is empty returns []."""
+        if not q:
+            return []
+        q_like = f"%{q}%"
         return Database.fetchall(
-            "SELECT * FROM customers WHERE name LIKE ? OR phone LIKE ? OR email LIKE ? ORDER BY name",
-            (q, q, q)
+            "SELECT * FROM customers WHERE name LIKE ? OR phone LIKE ? OR email LIKE ? ORDER BY name LIMIT ?",
+            (q_like, q_like, q_like, limit)
         )
 
     @staticmethod
